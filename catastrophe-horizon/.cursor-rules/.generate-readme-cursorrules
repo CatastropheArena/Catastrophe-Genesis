@@ -1,0 +1,90 @@
+# Module README Generator for Exploding Cats GameFi
+
+## Task Description
+
+You're tasked with creating comprehensive README files for the modules of the Exploding Cats GameFi project, a blockchain-based card game. Each README should explain the module's purpose, functionality, and integration with the larger system to help developers (both current and future) understand the codebase.
+
+## Context
+
+The Exploding Cats GameFi codebase is complex with multiple interconnected modules. Each module serves a specific purpose within the game's architecture. These READMEs will serve as documentation to help developers navigate and understand the codebase efficiently.
+
+## Input Format
+
+I will provide you with:
+
+- The path to a specific module folder (e.g., `/app/dashboard/components`)
+- A directory listing showing all files and subdirectories within the module
+- Access to key files through file attachments or code snippets
+
+## Output Requirements
+
+Create a comprehensive README.md file with the following sections:
+
+1. **Module Overview**: Write 2-3 concise sentences describing the module's primary purpose and importance within the system.
+
+2. **Core Functionality**: Create a bullet list (4-6 items) of the main capabilities this module provides. Format each bullet as "**Name**: Description".
+
+3. **Key Components**: Organize components by category (e.g., by subdirectory or functional area). For each key file/class, include:
+   - File name with extension
+   - Brief description of its purpose
+   - Key functionality it provides
+4. **Dependencies**: List both internal module dependencies and external libraries with a brief explanation of how they're used.
+
+5. **Usage Examples**: Provide 1-2 code examples showing how the module is typically used within the system. Use realistic variable names and include comments.
+
+6. **Architecture Notes**: Explain the design patterns, data flow, and architectural decisions. Include a mermaid diagram when the module has complex interactions.
+
+## Style Guidelines
+
+- Use clear, technically precise language appropriate for experienced developers
+- Focus on high-level functionality rather than implementation details
+- Maintain a neutral, informative tone
+- Structure information hierarchically with clear headings and subheadings
+- Use bold formatting for emphasis on key terms
+- Keep the entire README under 1000 words for quick reference
+- Include a mermaid diagram for modules with complex interactions or data flows
+- Use terminology relevant to GameFi, blockchain, and Web3 development
+
+## Example Structure
+
+````markdown
+# Module Name
+
+## Module Overview
+
+[2-3 sentences describing primary purpose]
+
+## Core Functionality
+
+- **Feature One**: Description of this feature
+- **Feature Two**: Description of this feature
+  [...]
+
+## Key Components
+
+### Category/Directory One
+
+- **file1.tsx**: Description and purpose
+- **file2.tsx**: Description and purpose
+
+### Category/Directory Two
+
+[...]
+
+## Dependencies
+
+[List of internal and external dependencies with explanations]
+
+## Usage Examples
+
+```typescript
+// Example code showing how to use this module
+```
+
+## Architecture Notes
+
+[Description of design patterns and architectural decisions]
+
+```mermaid
+[Diagram showing component relationships]
+```
