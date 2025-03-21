@@ -3,47 +3,16 @@
 import React from 'react';
 import { useState, useEffect, useRef } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import {
   Coins,
   Sparkles,
-  Gift,
-  Wallet,
   Users,
   Layers,
   Clock,
-  Check,
-  X,
-  AlertCircle,
-  Star,
-  ChevronRight,
-  ChevronLeft,
-  Flame,
   ArrowRightLeft,
-  DollarSign,
-  ArrowUpDown,
 } from "lucide-react"
 import { useMobile } from "@/hooks/use-mobile"
 import { useRouter } from "next/navigation"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Progress } from "@/components/ui/progress"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import Welcome from './components/welcome';
 import DrawnCardModal from './components/drawn-card';
 import DialogModal from './components/dialog-modal';
@@ -56,8 +25,8 @@ import CardGameMatches from './components/game-matches';
 import Exchange from './components/exchange';
 import { 
   Assets, CardItem, RentalCard, MyRentalCard, RentalHistoryItem, 
-  StakedCard, StakingPool, GameMatch, CardPack, DrawHistoryItem,
-  DrawnCard, DialogType, DialogState
+  StakedCard, StakingPool, GameMatch, DrawHistoryItem,
+  DrawnCard, DialogState
 } from "@/app/types"
 
 // Update the initialAssets.cards array to include a rented card indicator
@@ -296,9 +265,6 @@ const extendedCardPool = [
     image: "/placeholder.svg?height=200&width=150",
   },
 ]
-
-// 修改 StakeInputConfirmAction 类型
-type StakeInputConfirmAction = (amount: number | undefined) => void;
 
 export default function DashboardPage() {
   const router = useRouter()
