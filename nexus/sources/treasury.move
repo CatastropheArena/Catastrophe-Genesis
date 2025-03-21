@@ -15,10 +15,10 @@ module nexus::treasury {
     const ENotAuthorized: u64 = 1;
 
     /// One-time witness for the module
-    struct TREASURY has drop {}
+    public struct TREASURY has drop {}
 
     /// 资金库对象
-    struct Treasury has key {
+    public struct Treasury has key {
         id: UID,
         admin: address,
         fragment_balance: Balance<FRAGMENT>,
@@ -26,14 +26,14 @@ module nexus::treasury {
     }
 
     /// 资金库创建事件
-    struct TreasuryCreated has copy, drop {
+    public struct TreasuryCreated has copy, drop {
         treasury_id: address,
         admin: address,
         created_at: u64
     }
 
     /// 奖励发放事件
-    struct RewardsDistributed has copy, drop {
+    public struct RewardsDistributed has copy, drop {
         treasury_id: address,
         recipient: address,
         amount: u64,
@@ -41,7 +41,7 @@ module nexus::treasury {
     }
 
     /// 资金存入事件
-    struct FundsDeposited has copy, drop {
+    public struct FundsDeposited has copy, drop {
         treasury_id: address,
         depositor: address,
         amount: u64,

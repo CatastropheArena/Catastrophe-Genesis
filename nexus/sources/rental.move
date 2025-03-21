@@ -21,7 +21,7 @@ module nexus::rental {
     const ERentalNotExpired: u64 = 6;
 
     /// 租赁卡牌
-    struct RentalCard has key {
+    public struct RentalCard has key {
         id: UID,
         original_card_id: address,
         owner: address,
@@ -34,7 +34,7 @@ module nexus::rental {
     }
 
     /// 租赁相关事件
-    struct CardRented has copy, drop {
+    public struct CardRented has copy, drop {
         rental_id: address,
         card_id: address,
         owner: address,
@@ -45,7 +45,7 @@ module nexus::rental {
         rented_at: u64
     }
 
-    struct RentalExpired has copy, drop {
+    public struct RentalExpired has copy, drop {
         rental_id: address,
         card_id: address,
         owner: address,
@@ -53,7 +53,7 @@ module nexus::rental {
         expired_at: u64
     }
 
-    struct RentalUsed has copy, drop {
+    public struct RentalUsed has copy, drop {
         rental_id: address,
         card_id: address,
         renter: address,

@@ -18,7 +18,7 @@ module nexus::card {
     const EInvalidLevel: u64 = 2;
 
     /// 卡牌对象
-    struct Card has key, store {
+    public struct Card has key, store {
         id: UID,
         name: String,
         rarity: u8,
@@ -29,7 +29,7 @@ module nexus::card {
     }
 
     /// 卡牌创建事件
-    struct CardCreated has copy, drop {
+    public struct CardCreated has copy, drop {
         card_id: address,
         name: String,
         rarity: u8,
@@ -38,7 +38,7 @@ module nexus::card {
     }
 
     /// 卡牌升级事件
-    struct CardUpgraded has copy, drop {
+    public struct CardUpgraded has copy, drop {
         card_id: address,
         old_level: u8,
         new_level: u8,
@@ -46,7 +46,7 @@ module nexus::card {
     }
 
     /// 卡牌销毁事件
-    struct CardBurned has copy, drop {
+    public struct CardBurned has copy, drop {
         card_id: address,
         owner: address,
         burned_at: u64

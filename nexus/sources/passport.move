@@ -9,7 +9,7 @@ module nexus::passport {
     use std::vector;
 
     /// 护照对象，每个地址只能拥有一个
-    struct Passport has key, store {
+    public struct Passport has key, store {
         id: UID,
         owner: address,
         last_claim_time: u64,
@@ -19,14 +19,14 @@ module nexus::passport {
     }
 
     /// 护照创建事件
-    struct PassportCreated has copy, drop {
+    public struct PassportCreated has copy, drop {
         passport_id: address,
         owner: address,
         created_at: u64
     }
 
     /// 每日奖励领取事件
-    struct DailyRewardsClaimed has copy, drop {
+    public struct DailyRewardsClaimed has copy, drop {
         passport_id: address,
         owner: address,
         amount: u64,

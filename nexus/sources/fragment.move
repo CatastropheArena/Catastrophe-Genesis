@@ -14,29 +14,29 @@ module nexus::fragment {
     const ENotOwner: u64 = 1;
 
     /// One-time witness for the module
-    struct FRAGMENT has drop {}
+    public struct FRAGMENT has drop {}
 
     /// Fragment coin metadata
-    struct FragmentMetadata has key {
+    public struct FragmentMetadata has key, store {
         id: UID
     }
 
     /// 碎片铸造事件
-    struct FragmentMinted has copy, drop {
+    public struct FragmentMinted has copy, drop {
         amount: u64,
         recipient: address,
         minted_at: u64
     }
 
     /// 碎片销毁事件
-    struct FragmentBurned has copy, drop {
+    public struct FragmentBurned has copy, drop {
         amount: u64,
         owner: address,
         burned_at: u64
     }
 
     /// 碎片转移事件
-    struct FragmentTransferred has copy, drop {
+    public struct FragmentTransferred has copy, drop {
         amount: u64,
         from: address,
         to: address,

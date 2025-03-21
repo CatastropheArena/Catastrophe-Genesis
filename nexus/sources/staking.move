@@ -19,7 +19,7 @@ module nexus::staking {
     const EInvalidAmount: u64 = 3;
 
     /// 质押池
-    struct StakingPool has key {
+    public struct StakingPool has key {
         id: UID,
         card_type: String,
         total_staked: u64,
@@ -30,28 +30,28 @@ module nexus::staking {
     }
 
     /// 质押者信息
-    struct StakerInfo has store {
+    public struct StakerInfo has store {
         staked_cards: vector<address>,
         rewards_earned: u64,
         last_update_time: u64
     }
 
     /// 质押相关事件
-    struct CardStaked has copy, drop {
+    public struct CardStaked has copy, drop {
         pool_id: address,
         card_id: address,
         staker: address,
         staked_at: u64
     }
 
-    struct CardUnstaked has copy, drop {
+    public struct CardUnstaked has copy, drop {
         pool_id: address,
         card_id: address,
         staker: address,
         unstaked_at: u64
     }
 
-    struct RewardsClaimed has copy, drop {
+    public struct RewardsClaimed has copy, drop {
         pool_id: address,
         staker: address,
         amount: u64,
