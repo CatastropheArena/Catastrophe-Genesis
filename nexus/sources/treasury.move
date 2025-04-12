@@ -44,7 +44,7 @@ module nexus::treasury {
         deposited_at: u64
     }
 
-        public struct AdminChanged has copy, drop {
+    public struct AdminChanged has copy, drop {
         old_admin: address,
         new_admin: address,
         at: u64
@@ -95,7 +95,7 @@ module nexus::treasury {
     ): Token<FRAGMENT> {
         // 初始奖励: 50个碎片
         let amount = 50;
-        let rewards = fragment::mint(store, amount, recipient, clock, ctx);
+        let rewards = fragment::mint(store, amount, clock, ctx);
 
         event::emit(RewardsDistributed {
             treasury_id: object::uid_to_address(&treasury.id),
@@ -118,7 +118,7 @@ module nexus::treasury {
 
         // 每日奖励: 10个碎片
         let amount = 10;
-        let rewards = fragment::mint(store, amount, recipient, clock, ctx);
+        let rewards = fragment::mint(store, amount, clock, ctx);
 
         event::emit(RewardsDistributed {
             treasury_id: object::uid_to_address(&treasury.id),

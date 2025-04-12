@@ -28,7 +28,6 @@ module nexus::fragment {
     /// 碎片铸造事件
     public struct FragmentMinted has copy, drop {
         amount: u64,
-        recipient: address,
         at: u64
     }
     
@@ -85,16 +84,15 @@ module nexus::fragment {
         ctx: &mut TxContext
     ){
         let sender = tx_context::sender(ctx);
-        let fragments = mint(store, amount, sender, clock, ctx);
+        let fragments = mint(store, amount, clock, ctx);
         let req = transfer_fragments(fragments, sender, ctx);
         confirm_request(store, req, ctx);
     }
 
-       /// 管理员铸造碎片
+    /// 管理员铸造碎片
     public(package) fun mint(
         store: &mut FragmentStore,
         amount: u64, 
-        recipient: address, 
         clock: &Clock,
         ctx: &mut TxContext
     ): Token<FRAGMENT> {
@@ -102,7 +100,6 @@ module nexus::fragment {
         
         event::emit(FragmentMinted {
             amount,
-            recipient,
             at: clock::timestamp_ms(clock)
         });
         fragments
@@ -154,21 +151,4 @@ module nexus::fragment {
     public fun balance(fragments: &Token<FRAGMENT>): u64 {
         token::value(fragments)
     }
-
-    // /// 销毁碎片
-    // public fun burn(
-    //     store: &mut FragmentStore,
-    //     fragments: Token<FRAGMENT>, 
-    //     ctx: &mut TxContext
-    // ) {
-    //     let amount = token::value(&fragments);
-    //     let owner = tx_context::sender(ctx);
-
-    //     token::burn(&mut store.treasury, fragments);
-
-    //     event::emit(FragmentBurned {
-    //         amount,
-    //         owner,
-    //     });
-    // }
 } 

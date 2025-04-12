@@ -76,7 +76,6 @@ module nexus::passport {
         transfer::transfer(passport, sender);
 
         vector::push_back(&mut state.users, sender);
-
     }
 
     /// 领取每日奖励
