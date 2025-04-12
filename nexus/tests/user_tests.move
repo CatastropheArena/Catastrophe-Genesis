@@ -12,6 +12,7 @@ module nexus::user_tests {
     use nexus::passport::{Self, State, Passport};
     use nexus::fragment::{Self, FragmentStore};
     use nexus::fish::{FISH};
+    use nexus::admin::{Self, AdminCap};
 
     // Test constants
     const ADMIN: address = @0xAD;
@@ -29,6 +30,12 @@ module nexus::user_tests {
         ts::next_tx(scenario, ADMIN);
         {
             treasury::init_for_testing(ts::ctx(scenario));
+        };
+
+        // 初始化管理员
+        ts::next_tx(scenario, ADMIN);
+        {
+            admin::init_for_testing(ts::ctx(scenario));
         };
 
         // 为资金库添加初始资金
@@ -60,7 +67,59 @@ module nexus::user_tests {
             assert!(ts::has_most_recent_shared<State>(), 0);
             assert!(ts::has_most_recent_shared<Treasury>(), 1);
             assert!(ts::has_most_recent_shared<FragmentStore>(), 2);
+            assert!(ts::has_most_recent_for_address<AdminCap>(ADMIN), 3);
         };
+    }
+
+    #[test]
+    fun test_admin_transfer() {
+        let mut scenario = ts::begin(ADMIN);
+        init_test_env(&mut scenario);
+
+        // 转移管理员权限
+        ts::next_tx(&mut scenario, ADMIN);
+        {
+            let admin_cap = ts::take_from_sender<AdminCap>(&scenario);
+            admin::transfer_admin_cap(admin_cap, USER1, ts::ctx(&mut scenario));
+        };
+
+        // 验证转移成功
+        ts::next_tx(&mut scenario, USER1);
+        {
+            assert!(ts::has_most_recent_for_address<AdminCap>(USER1), 0);
+        };
+
+        ts::end(scenario);
+    }
+
+    #[test]
+    fun test_admin_withdraw() {
+        let mut scenario = ts::begin(ADMIN);
+        init_test_env(&mut scenario);
+
+        // 管理员提取资金
+        ts::next_tx(&mut scenario, ADMIN);
+        {
+            let admin_cap = ts::take_from_sender<AdminCap>(&scenario);
+            let mut treasury = ts::take_shared<Treasury>(&scenario);
+            
+            let coin = treasury::withdraw(&mut treasury, 1000, &admin_cap, ts::ctx(&mut scenario));
+            transfer::public_transfer(coin, ADMIN);
+            
+            ts::return_to_sender(&scenario, admin_cap);
+            ts::return_shared(treasury);
+        };
+
+        // 验证提取成功
+        ts::next_tx(&mut scenario, ADMIN);
+        {
+            assert!(ts::has_most_recent_for_address<Coin<FISH>>(ADMIN), 0);
+            let coin = ts::take_from_sender<Coin<FISH>>(&scenario);
+            assert!(coin::value(&coin) == 1000, 1);
+            ts::return_to_sender(&scenario, coin);
+        };
+
+        ts::end(scenario);
     }
 
     #[test]

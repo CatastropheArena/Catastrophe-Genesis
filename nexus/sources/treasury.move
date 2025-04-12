@@ -11,18 +11,16 @@ module nexus::treasury {
     use nexus::fragment::{Self, FRAGMENT, FragmentStore};
     use nexus::fish::{Self, FISH};
     use nexus::passport::{Self, Passport};
+    use nexus::admin::AdminCap;
 
     //---------------------------------------------- Error Codes ----------------------------------------------//
     const EInsufficientBalance: u64 = 0;
-    const ENotAuthorized: u64 = 1;
-    const EInvalidAddress: u64 = 2;
-    const EAlreadyClaimed: u64 = 3;
+    const EAlreadyClaimed: u64 = 1;
 
     //---------------------------------------------- Struct ----------------------------------------------//
     /// 资金库对象
     public struct Treasury has key {
         id: UID,
-        admin: address,
         coin_balance: Balance<FISH>,
         claimed_passports: VecSet<ID>, // 记录已领取初始奖励的护照ID
     }
@@ -50,18 +48,10 @@ module nexus::treasury {
         deposited_at: u64
     }
 
-    public struct AdminChanged has copy, drop {
-        old_admin: address,
-        new_admin: address,
-        at: u64
-    }
-
     //---------------------------------------------- Init ----------------------------------------------//
     fun init(ctx: &mut TxContext) {
-        let sender = tx_context::sender(ctx);
         let treasury = Treasury {
             id: object::new(ctx),
-            admin: sender,
             coin_balance: balance::zero<FISH>(),
             claimed_passports: vec_set::empty(),
         };
@@ -182,46 +172,18 @@ module nexus::treasury {
     }
 
     //---------------------------------------------- Admin functions ----------------------------------------------//
-    public(package) fun withdraw(
+    public fun withdraw(
         treasury: &mut Treasury,
         amount: u64,
+        _: &AdminCap,
         ctx: &mut TxContext
     ): Coin<FISH> {
-        let sender = tx_context::sender(ctx);
         assert!(balance::value(&treasury.coin_balance) >= amount, EInsufficientBalance);
-        assert_admin(sender, treasury.admin);
         coin::from_balance(balance::split(&mut treasury.coin_balance, amount), ctx)
     }
 
-    public(package) fun change_admin(
-        treasury: &mut Treasury,
-        new_admin: address,
-        clock: &Clock,
-        ctx: &TxContext
-    ){
-        let sender = tx_context::sender(ctx);
-        let old_admin = treasury.admin;
-        assert_admin(sender, old_admin);
-        assert!(new_admin != @0x0, EInvalidAddress);
-        assert!(new_admin != old_admin, EInvalidAddress);
-        treasury.admin = new_admin;
-        event::emit(AdminChanged{
-            old_admin,
-            new_admin,
-            at: clock::timestamp_ms(clock)
-        })
-    }
     //---------------------------------------------- Get functions ----------------------------------------------//
-
     public fun get_balance(treasury: &Treasury): u64 {
         balance::value(&treasury.coin_balance)
-    }
-
-    public fun get_admin(treasury: &Treasury): address {
-        treasury.admin
-    }
-
-    fun assert_admin(sender: address, admin: address){
-        assert!(sender == admin, ENotAuthorized);
     }
 } 
