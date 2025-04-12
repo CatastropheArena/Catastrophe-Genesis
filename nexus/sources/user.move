@@ -22,10 +22,20 @@ module nexus::user{
         ctx: &mut TxContext
     ){
         let sender = tx_context::sender(ctx);
-        passport::create_passport(state, clock, ctx);
-        let fragments = treasury::distribute_initial_rewards(treasury, store, sender, clock, ctx);
+        
+        // 创建护照
+        let passport = passport::create_passport(state, clock, ctx);
+        
+        // 发放初始奖励（碎片和FISH）
+        let (fragments, fish) = treasury::distribute_initial_rewards_all(treasury, store, &passport, clock, ctx);
+        
+        // 处理碎片奖励
         let req = fragment::transfer_fragments(fragments, sender, ctx);
         fragment::confirm_request(store, req, ctx);
+        
+        // 转移 FISH 和护照给用户
+        transfer::public_transfer(fish, sender);
+        passport::transfer_passport(passport, ctx);
     }
 
     public entry fun claim_daily_rewards(
@@ -37,9 +47,11 @@ module nexus::user{
     ) {
         let sender = tx_context::sender(ctx);
 
-        passport::claim_daily_rewards(passport, clock, ctx);
+        // 检查并更新护照状态
+        passport::claim_daily_rewards(passport, clock);
 
-        let fragments = treasury::distribute_daily_rewards(treasury, store, sender, clock, ctx);
+        // 发放每日奖励
+        let fragments = treasury::distribute_daily_rewards(treasury, store, passport, clock, ctx);
         let req = fragment::transfer_fragments(fragments, sender, ctx);
         fragment::confirm_request(store, req, ctx);
     }

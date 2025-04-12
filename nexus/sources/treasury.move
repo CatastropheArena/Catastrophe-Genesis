@@ -7,32 +7,38 @@ module nexus::treasury {
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::token::{Self, Token};
     use std::string::{Self, String};
+    use sui::vec_set::{Self, VecSet};
     use nexus::fragment::{Self, FRAGMENT, FragmentStore};
     use nexus::fish::{Self, FISH};
+    use nexus::passport::{Self, Passport};
 
     //---------------------------------------------- Error Codes ----------------------------------------------//
     const EInsufficientBalance: u64 = 0;
     const ENotAuthorized: u64 = 1;
     const EInvalidAddress: u64 = 2;
+    const EAlreadyClaimed: u64 = 3;
 
     //---------------------------------------------- Struct ----------------------------------------------//
-    // /// One-time witness for the module
-    // public struct TREASURY has drop {}
-
     /// 资金库对象
     public struct Treasury has key {
         id: UID,
         admin: address,
         coin_balance: Balance<FISH>,
+        claimed_passports: VecSet<ID>, // 记录已领取初始奖励的护照ID
     }
 
     //---------------------------------------------- Events ----------------------------------------------//
     /// 奖励发放事件
     public struct RewardsDistributed has copy, drop {
         treasury_id: address,
+        passport_id: address,
         recipient: address,
         amount: u64,
-        distributed_at: u64
+        reward_type: String,  // 奖励类型: "Initial Fragment", "Initial FISH", "Daily Fragment" 等
+        distributed_at: u64,
+        total_claimed_count: u64,  // 该护照已领取奖励的次数
+        balance_after: u64,   // Treasury 剩余 FISH 数量
+        purpose: String      // 发放目的说明
     }
 
     /// 资金存入事件
@@ -57,6 +63,7 @@ module nexus::treasury {
             id: object::new(ctx),
             admin: sender,
             coin_balance: balance::zero<FISH>(),
+            claimed_passports: vec_set::empty(),
         };
 
         transfer::share_object(treasury);
@@ -85,47 +92,87 @@ module nexus::treasury {
         });
     }
 
-    /// 发放初始奖励
-    public(package) fun distribute_initial_rewards(
+    /// 发放初始奖励（包含碎片和FISH）
+    public(package) fun distribute_initial_rewards_all(
         treasury: &mut Treasury,
         store: &mut FragmentStore,
-        recipient: address,
+        passport: &Passport,
         clock: &Clock,
         ctx: &mut TxContext
-    ): Token<FRAGMENT> {
-        // 初始奖励: 50个碎片
-        let amount = 50;
-        let rewards = fragment::mint(store, amount, clock, ctx);
+    ): (Token<FRAGMENT>, Coin<FISH>) {
+        let passport_id = object::id(passport);
+        assert!(!vec_set::contains(&treasury.claimed_passports, &passport_id), EAlreadyClaimed);
+        
+        // 记录护照已领取
+        vec_set::insert(&mut treasury.claimed_passports, passport_id);
+        
+        let recipient = tx_context::sender(ctx);
+        let now = clock::timestamp_ms(clock);
+        let passport_id_addr = passport::get_passport_id(passport);
+        
+        // 发放初始碎片: 50个碎片
+        let fragment_amount = 50;
+        let rewards = fragment::mint(store, fragment_amount, clock, ctx);
 
         event::emit(RewardsDistributed {
             treasury_id: object::uid_to_address(&treasury.id),
+            passport_id: passport_id_addr,
             recipient,
-            amount,
-            distributed_at: clock::timestamp_ms(clock)
+            amount: fragment_amount,
+            reward_type: string::utf8(b"Initial Fragment"),
+            distributed_at: now,
+            total_claimed_count: vec_set::size(&treasury.claimed_passports),
+            balance_after: balance::value(&treasury.coin_balance),
+            purpose: string::utf8(b"Initial rewards distribution - Fragment part")
         });
 
-        rewards
+        // 发放初始 FISH: 100 FISH
+        let fish_amount = 100;
+        let fish = coin::from_balance(balance::split(&mut treasury.coin_balance, fish_amount), ctx);
+
+        event::emit(RewardsDistributed {
+            treasury_id: object::uid_to_address(&treasury.id),
+            passport_id: passport_id_addr,
+            recipient,
+            amount: fish_amount,
+            reward_type: string::utf8(b"Initial FISH"),
+            distributed_at: now,
+            total_claimed_count: vec_set::size(&treasury.claimed_passports),
+            balance_after: balance::value(&treasury.coin_balance),
+            purpose: string::utf8(b"Initial rewards distribution - FISH part")
+        });
+
+        (rewards, fish)
     }
 
     /// 发放每日奖励
     public(package) fun distribute_daily_rewards(
         treasury: &mut Treasury,
         store: &mut FragmentStore,
-        recipient: address,
+        passport: &Passport,
         clock: &Clock,
         ctx: &mut TxContext
     ): Token<FRAGMENT> {
-
+        let recipient = tx_context::sender(ctx);
+        let now = clock::timestamp_ms(clock);
+        let passport_id_addr = passport::get_passport_id(passport);
+        
         // 每日奖励: 10个碎片
         let amount = 10;
         let rewards = fragment::mint(store, amount, clock, ctx);
 
         event::emit(RewardsDistributed {
             treasury_id: object::uid_to_address(&treasury.id),
+            passport_id: passport_id_addr,
             recipient,
             amount,
-            distributed_at: clock::timestamp_ms(clock)
+            reward_type: string::utf8(b"Daily Fragment"),
+            distributed_at: now,
+            total_claimed_count: passport::get_daily_rewards_claimed(passport),
+            balance_after: balance::value(&treasury.coin_balance),
+            purpose: string::utf8(b"Daily rewards distribution")
         });
+        
         rewards
     }
 
