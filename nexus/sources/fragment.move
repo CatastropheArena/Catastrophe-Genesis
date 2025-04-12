@@ -76,6 +76,11 @@ module nexus::fragment {
         token::share_policy(policy);
     }
 
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(FRAGMENT {}, ctx)
+    }
+
     //---------------------------------------------- Core functions ----------------------------------------------//
     public(package) fun buy_fragments(
         amount: u64,

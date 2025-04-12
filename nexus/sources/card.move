@@ -359,23 +359,13 @@ module nexus::card {
         object::delete(id);
     }
 
-    // /// 销毁卡牌 (局内)
-    // public fun burn_card(card: Card, ctx: &mut TxContext): (u8, address) {
-    //     let Card { id, card_type: _, level, owner, created_at: _ } = card;
-        
-    //     let card_id = object::uid_to_address(&id);
-        
-    //     event::emit(CardBurned {
-    //         card_id,
-    //         owner,
-    //         burned_at: tx_context::epoch_timestamp_ms(ctx)
-    //     });
-
-    //     object::delete(id);
-        
-    //     // 返回稀有度和所有者，便于碎片计算和转账
-    //     (rarity, owner)
-    // }
+    #[test_only]
+    public fun burn_card_for_testing(card: Card, ctx: &mut TxContext): (u8, address) {
+        let Card { id, card_type, level: _, owner, created_at: _ } = card;
+        let rarity = card_type.rarity;
+        object::delete(id);
+        (rarity, owner)
+    }
 
     //---------------------------------------------- Get functions ----------------------------------------------//
     /// 获取卡牌ID

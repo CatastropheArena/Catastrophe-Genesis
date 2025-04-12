@@ -69,6 +69,11 @@ module nexus::treasury {
         transfer::share_object(treasury);
     }
 
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx)
+    }
+
     //---------------------------------------------- User functions ----------------------------------------------//
     /// 存入资金
     public fun deposit(

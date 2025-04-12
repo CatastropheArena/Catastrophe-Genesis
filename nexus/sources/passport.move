@@ -34,6 +34,11 @@ module nexus::passport {
         })
     }
 
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx)
+    }
+
     //---------------------------------------------- Events ----------------------------------------------//
     /// 护照创建事件
     public struct PassportCreated has copy, drop {
