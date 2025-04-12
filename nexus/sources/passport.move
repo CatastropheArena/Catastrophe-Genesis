@@ -1,15 +1,23 @@
+#[allow(unused_mut_parameter)]
 module nexus::passport {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
     use sui::clock::{Self, Clock};
-    use sui::table::{Self, Table};
     use sui::event;
-    use std::string::{Self, String};
-    use std::vector;
+
+    //---------------------------------------------- Consts ----------------------------------------------//
+    const DAY_IN_MS: u64 = 86400000; // 24 * 60 * 60 * 1000 毫秒
+
+    //---------------------------------------------- Errors ----------------------------------------------//
+    const EPassportAlreadyExists: u64 = 0;
+    const ETooEarlyToClaim: u64 = 1;
+
+    //---------------------------------------------- Structs ----------------------------------------------//
+    public struct State has key {
+        id: UID,
+        users: vector<address>
+    }
 
     /// 护照对象，每个地址只能拥有一个
-    public struct Passport has key, store {
+    public struct Passport has key {
         id: UID,
         owner: address,
         last_claim_time: u64,
@@ -18,6 +26,15 @@ module nexus::passport {
         created_at: u64
     }
 
+    //---------------------------------------------- Init ----------------------------------------------//
+    fun init(ctx: &mut TxContext){
+        transfer::share_object(State{
+            id: object::new(ctx),
+            users: vector::empty()
+        })
+    }
+
+    //---------------------------------------------- Events ----------------------------------------------//
     /// 护照创建事件
     public struct PassportCreated has copy, drop {
         passport_id: address,
@@ -33,19 +50,16 @@ module nexus::passport {
         claimed_at: u64
     }
 
-    // 错误代码
-    const EPassportAlreadyExists: u64 = 0;
-    const ENotOwner: u64 = 1;
-    const ETooEarlyToClaim: u64 = 2;
-
-    // 常量
-    const DAY_IN_MS: u64 = 86400000; // 24 * 60 * 60 * 1000 毫秒
-
+    //---------------------------------------------- User functions ----------------------------------------------//
     /// 创建新的护照
-    public entry fun create_passport(clock: &Clock, ctx: &mut TxContext) {
+    public(package) fun create_passport(
+        state: &mut State,
+        clock: &Clock, 
+        ctx: &mut TxContext
+    ){
         let sender = tx_context::sender(ctx);
         let now = clock::timestamp_ms(clock);
-        
+        assert!(!vector::contains(&state.users, &sender), EPassportAlreadyExists);
         let passport = Passport {
             id: object::new(ctx),
             owner: sender,
@@ -54,29 +68,27 @@ module nexus::passport {
             rental_cards: vector::empty(),
             created_at: now
         };
-
         event::emit(PassportCreated {
             passport_id: object::uid_to_address(&passport.id),
             owner: sender,
             created_at: now
         });
+        transfer::transfer(passport, sender);
 
-        transfer::public_transfer(passport, sender);
-    }
+        vector::push_back(&mut state.users, sender);
 
-    /// 检查是否可以领取每日奖励
-    public fun can_claim_daily_rewards(passport: &Passport, clock: &Clock): bool {
-        let now = clock::timestamp_ms(clock);
-        now >= passport.last_claim_time + DAY_IN_MS
     }
 
     /// 领取每日奖励
-    public fun claim_daily_rewards(passport: &mut Passport, clock: &Clock, ctx: &mut TxContext) {
+    public(package) fun claim_daily_rewards(
+        passport: &mut Passport, 
+        clock: &Clock, 
+        ctx: &mut TxContext
+    ) {
         let sender = tx_context::sender(ctx);
-        assert!(passport.owner == sender, ENotOwner);
         
         let now = clock::timestamp_ms(clock);
-        assert!(now >= passport.last_claim_time + DAY_IN_MS, ETooEarlyToClaim);
+        assert!(can_claim_daily_rewards(passport, clock), ETooEarlyToClaim);
 
         passport.last_claim_time = now;
         passport.daily_rewards_claimed = passport.daily_rewards_claimed + 1;
@@ -84,22 +96,31 @@ module nexus::passport {
         event::emit(DailyRewardsClaimed {
             passport_id: object::uid_to_address(&passport.id),
             owner: sender,
-            amount: 1,
+            amount: passport.daily_rewards_claimed,
             claimed_at: now
         });
     }
 
-    /// 添加租赁卡牌
-    public fun add_rental_card(passport: &mut Passport, card_address: address) {
-        vector::push_back(&mut passport.rental_cards, card_address);
-    }
+    // // todo: rent instead of add
+    // /// 添加租赁卡牌
+    // public fun add_rental_card(passport: &mut Passport, card_address: address) {
+    //     vector::push_back(&mut passport.rental_cards, card_address);
+    // }
 
-    /// 移除租赁卡牌
-    public fun remove_rental_card(passport: &mut Passport, card_address: address) {
-        let (exists, index) = vector::index_of(&passport.rental_cards, &card_address);
-        if (exists) {
-            vector::remove(&mut passport.rental_cards, index);
-        };
+    // // todo: remove expired rental card
+    // /// 移除租赁卡牌
+    // public fun remove_rental_card(passport: &mut Passport, card_address: address) {
+    //     let (exists, index) = vector::index_of(&passport.rental_cards, &card_address);
+    //     if (exists) {
+    //         vector::remove(&mut passport.rental_cards, index);
+    //     };
+    // }
+
+    //---------------------------------------------- Getter functions ----------------------------------------------//
+    /// 检查是否可以领取每日奖励
+    public fun can_claim_daily_rewards(passport: &Passport, clock: &Clock): bool {
+        let now = clock::timestamp_ms(clock);
+        now >= passport.last_claim_time + DAY_IN_MS
     }
 
     /// 获取护照拥有者
@@ -111,4 +132,7 @@ module nexus::passport {
     public fun get_rental_cards(passport: &Passport): &vector<address> {
         &passport.rental_cards
     }
+
+    //---------------------------------------------- Helper functions ----------------------------------------------//
+
 }

@@ -1,3 +1,5 @@
+// not implemented yet
+/*
 module nexus::rental {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
@@ -184,3 +186,5 @@ module nexus::rental {
         clock::timestamp_ms(clock) <= rental.expires_at && rental.uses_left > 0 
     }
 } 
+
+*/
