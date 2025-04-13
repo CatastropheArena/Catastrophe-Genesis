@@ -1,4 +1,4 @@
-#[allow(implicit_const_copy, unused_const)]
+#[allow(implicit_const_copy, unused_const, unused_variable)]
 module nexus::card {
     //---------------------------------------------- Dependencies ----------------------------------------------//
     use sui::event;

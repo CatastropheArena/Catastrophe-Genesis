@@ -1,5 +1,7 @@
+#[allow(unused_use)]
 module nexus::admin {
     use sui::event;
+    use nexus::treasury::{Self, Treasury};
 
     /// 管理员权限凭证
     public struct AdminCap has key, store {
@@ -48,5 +50,19 @@ module nexus::admin {
         });
         
         transfer::public_transfer(admin_cap, new_admin);
+    }
+
+    public entry fun withdraw_coin(
+        treasury: &mut Treasury,
+        amount: u64,
+        _: &AdminCap,
+        ctx: &mut TxContext
+    ){
+        let coin = treasury::withdraw(
+            treasury,
+            amount,
+            ctx,
+        );
+        transfer::public_transfer(coin, tx_context::sender(ctx));
     }
 }

@@ -1,10 +1,10 @@
 #[test_only]
+#[allow(unused_let_mut, unused_use, unused_const)]
 module nexus::user_tests {
     use sui::test_scenario::{Self as ts, Scenario};
     use sui::clock::{Self, Clock};
     use sui::test_utils::assert_eq;
     use sui::coin::{Self, Coin};
-    use sui::transfer;
     use std::string;
     
     use nexus::user::{Self};
@@ -103,8 +103,7 @@ module nexus::user_tests {
             let admin_cap = ts::take_from_sender<AdminCap>(&scenario);
             let mut treasury = ts::take_shared<Treasury>(&scenario);
             
-            let coin = treasury::withdraw(&mut treasury, 1000, &admin_cap, ts::ctx(&mut scenario));
-            transfer::public_transfer(coin, ADMIN);
+            admin::withdraw_coin(&mut treasury, 1000, &admin_cap, ts::ctx(&mut scenario));
             
             ts::return_to_sender(&scenario, admin_cap);
             ts::return_shared(treasury);

@@ -1,14 +1,12 @@
 #[test_only]
+#[allow(unused_variable, unused_function, unused_use, unused_let_mut)]
 module nexus::card_tests {
     use sui::test_scenario::{Self as ts, Scenario};
     use sui::test_utils::{assert_eq};
-    use sui::object::{Self, ID, UID};
     use sui::clock::{Self, Clock};
     use sui::random::{Self, Random};
     use sui::coin::{Self};
-    use sui::tx_context::{Self, TxContext};
     use std::string::{Self, String};
-    use std::vector;
     use nexus::card::{Self, Card};
     use nexus::fragment::{Self, FragmentStore, FRAGMENT};
     use nexus::treasury::{Self, Treasury};

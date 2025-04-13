@@ -11,7 +11,6 @@ module nexus::treasury {
     use nexus::fragment::{Self, FRAGMENT, FragmentStore};
     use nexus::fish::{Self, FISH};
     use nexus::passport::{Self, Passport};
-    use nexus::admin::AdminCap;
 
     //---------------------------------------------- Error Codes ----------------------------------------------//
     const EInsufficientBalance: u64 = 0;
@@ -172,10 +171,9 @@ module nexus::treasury {
     }
 
     //---------------------------------------------- Admin functions ----------------------------------------------//
-    public fun withdraw(
+    public(package) fun withdraw(
         treasury: &mut Treasury,
         amount: u64,
-        _: &AdminCap,
         ctx: &mut TxContext
     ): Coin<FISH> {
         assert!(balance::value(&treasury.coin_balance) >= amount, EInsufficientBalance);

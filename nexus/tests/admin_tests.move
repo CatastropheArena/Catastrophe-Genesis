@@ -71,8 +71,7 @@ module nexus::admin_tests {
             let clock = clock::create_for_testing(ts::ctx(&mut scenario));
             
             // 尝试使用新管理员权限执行操作
-            let coin = treasury::withdraw(&mut treasury, 1000, &admin_cap, ts::ctx(&mut scenario));
-            transfer::public_transfer(coin, USER1);
+            admin::withdraw_coin(&mut treasury, 1000, &admin_cap, ts::ctx(&mut scenario));
             
             clock::destroy_for_testing(clock);
             ts::return_shared(treasury);
@@ -96,8 +95,7 @@ module nexus::admin_tests {
             let clock = clock::create_for_testing(ts::ctx(&mut scenario));
             
             // 尝试提取超过余额的金额
-            let coin = treasury::withdraw(&mut treasury, 1000, &admin_cap, ts::ctx(&mut scenario));
-            transfer::public_transfer(coin, ADMIN);
+            admin::withdraw_coin(&mut treasury, 1000, &admin_cap, ts::ctx(&mut scenario));
             
             clock::destroy_for_testing(clock);
             ts::return_shared(treasury);
@@ -105,4 +103,5 @@ module nexus::admin_tests {
         };
         ts::end(scenario);
     }
+    
 } 
