@@ -26,19 +26,6 @@ module nexus::passport {
         created_at: u64
     }
 
-    //---------------------------------------------- Init ----------------------------------------------//
-    fun init(ctx: &mut TxContext){
-        transfer::share_object(State{
-            id: object::new(ctx),
-            users: vector::empty()
-        })
-    }
-
-    #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
-        init(ctx)
-    }
-
     //---------------------------------------------- Events ----------------------------------------------//
     /// 护照创建事件
     public struct PassportCreated has copy, drop {
@@ -66,6 +53,19 @@ module nexus::passport {
         daily_rewards_claimed: u64,
         rental_cards_count: u64,
         updated_at: u64
+    }
+
+    //---------------------------------------------- Init ----------------------------------------------//
+    fun init(ctx: &mut TxContext){
+        transfer::share_object(State{
+            id: object::new(ctx),
+            users: vector::empty()
+        })
+    }
+
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx)
     }
 
     //---------------------------------------------- User functions ----------------------------------------------//
