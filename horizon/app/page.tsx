@@ -1,5 +1,5 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   return (
@@ -35,19 +35,27 @@ export default function HomePage() {
           <h1 className="text-4xl md:text-6xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500">
             Exploding Cats
           </h1>
-          <p className="text-xl md:text-2xl mb-8 text-purple-100">The ultimate GameFi card battle experience</p>
+          <p className="text-xl md:text-2xl mb-8 text-purple-100">
+            The ultimate GameFi card battle experience
+          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-12">
             <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 text-left">
-              <h3 className="text-xl font-semibold mb-2 text-pink-300">Strategic Gameplay</h3>
+              <h3 className="text-xl font-semibold mb-2 text-pink-300">
+                Strategic Gameplay
+              </h3>
               <p className="text-purple-100">
-                Destroy cards to gain resources and activate your deck to increase your win rate.
+                Destroy cards to gain resources and activate your deck to
+                increase your win rate.
               </p>
             </div>
             <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 text-left">
-              <h3 className="text-xl font-semibold mb-2 text-pink-300">Earn & Collect</h3>
+              <h3 className="text-xl font-semibold mb-2 text-pink-300">
+                Earn & Collect
+              </h3>
               <p className="text-purple-100">
-                Win matches to earn resources and synthesize powerful cards for your collection.
+                Win matches to earn resources and synthesize powerful cards for
+                your collection.
               </p>
             </div>
           </div>
@@ -63,6 +71,5 @@ export default function HomePage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
-
