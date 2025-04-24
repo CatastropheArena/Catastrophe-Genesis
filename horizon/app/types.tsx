@@ -29,7 +29,14 @@ export interface RentalCard {
   rate: number; // 每日租金
 }
 
-// 已租赁卡片接口
+// 已租赁卡片接口（扩展自RentalCard）
+export interface RentedCard extends RentalCard {
+  usesLeft: number;
+  totalUses: number;
+  expiresIn: number;
+}
+
+// 我的租赁卡片接口
 export interface MyRentalCard {
   id: number | string;
   name: string;
@@ -65,6 +72,7 @@ export interface StakedCard {
   stakedCount: number;
   poolShare: string;
   earned: number;
+  stakedAmount?: number;
 }
 
 // 质押池接口
@@ -115,7 +123,7 @@ export interface GameMatch {
 }
 
 // 对话框类型
-export type DialogType = "success" | "error" | "confirm" | "stakeInput" | "";
+export type DialogType = "confirm" | "stakeInput" | "success" | "error" | "";
 
 // 抽到的卡片接口
 export interface DrawnCard {
@@ -149,13 +157,14 @@ export interface DialogState {
   title: string;
   description: string;
   type: DialogType;
-  confirmAction: (amount?: number) => void;
-  confirmText?: string;
+  confirmText: string;
   cancelText?: string;
-  data?: any;
+  data: any;
+  isLoading: boolean;
+  confirmAction?: (amount?: number) => void;
 }
 
-// 添加新的接口
+// 选择器状态接口
 export interface SelectorState {
   type: string;
   index: number | null;
