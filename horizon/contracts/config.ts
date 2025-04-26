@@ -2,15 +2,15 @@ interface ContractAddresses {
   [key: string]: string;
 }
 
-type NetworkType = 'testnet' | 'mainnet';
+type NetworkType = "testnet" | "mainnet";
 
 const configs = {
   testnet: {
-      Package: "0x0000000000000000000000000000000000000000",
+    Package: process.env.NEXT_PUBLIC_TESTNET_PACKAGE || "",
   },
   mainnet: {
-      Package: "0x1111111111111111111111111111111111111111",
-  }
+    Package: process.env.NEXT_PUBLIC_MAINNET_PACKAGE || "",
+  },
 } as const satisfies Record<NetworkType, ContractAddresses>;
 
 export function getContractConfig(network: NetworkType): ContractAddresses {

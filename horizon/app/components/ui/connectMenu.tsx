@@ -50,7 +50,9 @@ const ConnectMenu = ({
       {/* Trigger */}
       <DropdownMenuTrigger className="h-full px-5 py-2 rounded-xl flex items-center gap-2 bg-white/20 outline-none ring-0 xl:button-animate-105">
         <div className={cn("w-3 aspect-square rounded-[50%] bg-blue-300")} />
-        <span className="text-sm">{displayName ? displayName : "Connect"}</span>
+        <span className="text-sm text-white">
+          {displayName ? displayName : "Connect"}
+        </span>
       </DropdownMenuTrigger>
       {/* Content */}
       <DropdownMenuContent
