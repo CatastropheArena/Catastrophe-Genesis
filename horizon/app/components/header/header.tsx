@@ -1,59 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Coins, Sparkles, LogOut, ChevronDown } from "lucide-react";
-import {
-  useCurrentAccount,
-  useSuiClient,
-  ConnectButton,
-  useDisconnectWallet,
-} from "@mysten/dapp-kit";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import React, { useState, useContext } from "react";
+import { Coins, Sparkles } from "lucide-react";
+import { AppContext } from "@/context/AppContext";
+import { ConnectModal } from "@mysten/dapp-kit";
+import ConnectMenu from "@/app/components/ui/connectMenu";
+import { Link as LinkIcon } from "lucide-react";
 
 export default function Header() {
   const [coins, setCoins] = useState(1000); // 使用mock数据初始化
   const [fragments, setFragments] = useState(500); // 使用mock数据初始化
 
-  const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const disconnectWallet = useDisconnectWallet();
-
-  useEffect(() => {
-    const fetchCoinBalance = async () => {
-      if (account) {
-        try {
-          const balance = await suiClient.getBalance({
-            owner: account.address,
-            coinType: "0x2::sui::SUI",
-          });
-          setCoins(Number(balance.totalBalance));
-        } catch (error) {
-          console.error("获取代币余额失败:", error);
-        }
-      }
-    };
-
-    fetchCoinBalance();
-  }, [account, suiClient]);
-
-  // 格式化钱包地址
-  const formatAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnectWallet.mutateAsync();
-    } catch (error) {
-      console.error("断开钱包连接失败:", error);
-    }
-  };
+  const { walletAddress, suiName } = useContext(AppContext);
 
   return (
     <header className="bg-purple-900/80 backdrop-blur-lg sticky top-0 z-40">
@@ -71,7 +29,8 @@ export default function Header() {
           </div>
 
           <div className="flex items-center gap-2">
-            {account && (
+            {/* Connect Button */}
+            {walletAddress ? (
               <>
                 <div className="flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full">
                   <Coins className="h-3 w-3 text-yellow-400" />
@@ -85,31 +44,24 @@ export default function Header() {
                     {fragments}
                   </span>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-white flex items-center gap-1 px-2 py-1 h-7"
-                    >
-                      {formatAddress(account.address)}
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem
-                      onClick={handleDisconnect}
-                      className="text-red-500 cursor-pointer"
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>断开连接</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <ConnectMenu walletAddress={walletAddress} suiName={suiName} />
               </>
-            )}
-            {!account && (
-              <ConnectButton className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 rounded-full text-sm" />
+            ) : (
+              <ConnectModal
+                trigger={
+                  <button
+                    className="h-full rounded-[11px] outline-none ring-0 xl:button-animate-105 overflow-hidden p-[1px]"
+                    disabled={!!walletAddress}
+                  >
+                    <div className="h-full px-5 py-4 flex items-center gap-2 rounded-xl bg-white/10">
+                      <span className="text-sm">
+                        {walletAddress ? "Connected" : "Connect Wallet"}
+                      </span>
+                      <LinkIcon size={17} className="text-white" />
+                    </div>
+                  </button>
+                }
+              />
             )}
           </div>
         </div>
