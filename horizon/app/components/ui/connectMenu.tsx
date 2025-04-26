@@ -48,7 +48,7 @@ const ConnectMenu = ({
   return (
     <DropdownMenu>
       {/* Trigger */}
-      <DropdownMenuTrigger className="h-full px-5 py-4 rounded-xl flex items-center gap-2 bg-white/20 outline-none ring-0 xl:button-animate-105">
+      <DropdownMenuTrigger className="h-full px-5 py-2 rounded-xl flex items-center gap-2 bg-white/20 outline-none ring-0 xl:button-animate-105">
         <div className={cn("w-3 aspect-square rounded-[50%] bg-blue-300")} />
         <span className="text-sm">{displayName ? displayName : "Connect"}</span>
       </DropdownMenuTrigger>
@@ -67,17 +67,14 @@ const ConnectMenu = ({
           {/* Copy Address */}
           <DropdownMenuItem className="DropdownMenuItem w-full">
             <button
-              className="w-full flex items-center justify-start gap-2 rounded-lg px-2 py-2 text-black hover:bg-main-700 hover:text-white"
+              className="w-full flex items-center justify-start gap-2 rounded-lg px-2 py-2 text-black hover:bg-main-700"
               onClick={() => {
                 window.navigator.clipboard.writeText(walletAddress);
                 toast.info("Your address copied to clipboard");
               }}
             >
-              <ClipboardCopyIcon
-                strokeWidth={2}
-                className="h-4 w-4 text-white"
-              />
-              <span className="text-sm text-white">Copy Address</span>
+              <ClipboardCopyIcon strokeWidth={2} className="h-4 w-4" />
+              <span className="text-sm">Copy Address</span>
             </button>
           </DropdownMenuItem>
           {/* Explorer */}
@@ -87,9 +84,9 @@ const ConnectMenu = ({
               target="_blank"
               className="w-full"
             >
-              <button className="w-full flex items-center justify-start gap-2 rounded-lg px-2 py-2 text-black hover:bg-main-700 hover:text-white">
-                <SlMagnifier strokeWidth={2} className="h-4 w-4 text-white" />
-                <span className="text-sm text-white">Explorer</span>
+              <button className="w-full flex items-center justify-start gap-2 rounded-lg px-2 py-2 text-black hover:bg-main-700">
+                <SlMagnifier strokeWidth={2} className="h-4 w-4" />
+                <span className="text-sm">Explorer</span>
               </button>
             </Link>
           </DropdownMenuItem>
@@ -101,11 +98,11 @@ const ConnectMenu = ({
           {/* Disconnect */}
           <DropdownMenuItem className="DropdownMenuItem w-full">
             <button
-              className="w-full flex items-center justify-start gap-2 rounded-lg px-2 py-2 text-black hover:bg-main-700 hover:text-white"
+              className="w-full flex items-center justify-start gap-2 rounded-lg px-2 py-2 text-black hover:bg-main-700"
               onClick={() => disconnectWallet()}
             >
-              <BiExit strokeWidth={1} className="h-4 w-4 text-white" />
-              <span className="text-sm text-white">Disconnect</span>
+              <BiExit strokeWidth={1} className="h-4 w-4" />
+              <span className="text-sm">Disconnect</span>
             </button>
           </DropdownMenuItem>
         </DropdownMenuGroup>

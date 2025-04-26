@@ -14,9 +14,9 @@ const NetworkMenu = () => {
 
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTriggerLeft className="w-full h-12 flex items-center justify-between rounded-lg pl-3.5 pr-2 py-2 text-black hover:bg-main-700 hover:text-white">
-        <NetworkIcon strokeWidth={2} className="h-4 w-4 text-white mr-2" />
-        <span className="text-sm text-white">Network</span>
+      <DropdownMenuSubTriggerLeft className="w-full h-12 flex items-center justify-between rounded-lg pl-3.5 pr-2 py-2 text-black hover:bg-main-700">
+        <NetworkIcon strokeWidth={2} className="h-4 w-4 mr-2" />
+        <span className="text-sm">Network</span>
       </DropdownMenuSubTriggerLeft>
       <DropdownMenuSubContent
         sideOffset={8}
@@ -35,7 +35,7 @@ const NetworkMenu = () => {
             key={`network-${_network}-${idx}`}
           >
             <button
-              className={`w-full flex items-center justify-between rounded-lg px-1 py-1 text-black hover:bg-main-700 hover:text-white ${
+              className={`w-full flex items-center justify-between rounded-lg px-1 py-1 text-black hover:bg-main-700 ${
                 network == _network ? "" : "opacity-50"
               }`}
               onClick={() => {
@@ -43,7 +43,7 @@ const NetworkMenu = () => {
                 setRpcUrl(getRpcNodes(_network as Network)[0].url);
               }}
             >
-              <span className="sm:text-sm text-white">{_network}</span>
+              <span className="sm:text-sm">{_network}</span>
             </button>
           </DropdownMenuItem>
         ))}

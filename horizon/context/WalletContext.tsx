@@ -6,6 +6,7 @@ import {
 } from "@mysten/dapp-kit";
 import { type StateStorage } from "zustand/middleware";
 import { useUserStore } from "@/stores/useUserStore";
+import { toast } from "react-toastify";
 
 type Props = {
   children: React.ReactNode;
