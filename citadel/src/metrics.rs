@@ -22,7 +22,7 @@ use prometheus::{
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio;
 use uuid::Uuid;
 
@@ -44,7 +44,7 @@ pub const METRICS_ROUTE: &str = "/metrics";
  * - 成功时返回状态码200和序列化的Prometheus指标文本
  * - 失败时返回状态码500和错误信息
  */
-pub async fn metrics(
+async fn metrics(
     Extension(registry_service): Extension<RegistryService>,
 ) -> (StatusCode, String) {
     let metrics_families = registry_service.gather_all();
@@ -63,12 +63,15 @@ pub async fn metrics(
  * 创建一个监听在指定端口的HTTP服务器，提供Prometheus指标数据
  * 服务器在后台线程中运行，不会阻塞调用线程
  * 
+ * 参数:
+ * @param custom_port - 可选的自定义端口号，如果不提供，则使用默认端口
+ * 
  * 返回:
  * 初始化的注册表服务实例，可用于注册和管理指标
  */
-pub fn start_basic_prometheus_server() -> RegistryService {
+pub fn start_basic_prometheus_server(custom_port: Option<u16>) -> RegistryService {
     // 创建监听所有网络接口的Socket地址
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), METRICS_HOST_PORT);
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), custom_port.unwrap_or(METRICS_HOST_PORT));
     // 创建新的Prometheus注册表
     let registry = Registry::new();
     // 初始化注册表服务
@@ -80,10 +83,21 @@ pub fn start_basic_prometheus_server() -> RegistryService {
 
     // 在后台线程中启动HTTP服务器
     tokio::spawn(async move {
-        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-        axum::serve(listener, app.into_make_service())
-            .await
-            .unwrap();
+        // 尝试绑定指定端口
+        match tokio::net::TcpListener::bind(&addr).await {
+            Ok(listener) => {
+                axum::serve(listener, app.into_make_service())
+                    .await
+                    .unwrap_or_else(|e| {
+                        eprintln!("Failed to start metrics server: {}", e);
+                    });
+            }
+            Err(e) => {
+                // 如果端口被占用，则打印错误但不会导致程序崩溃
+                // 这在测试环境中尤其重要，我们不希望因为端口被占用而导致测试失败
+                eprintln!("Failed to bind metrics server to port {}: {}", METRICS_HOST_PORT, e);
+            }
+        }
     });
     registry_service
 }
@@ -194,8 +208,9 @@ impl RegistryService {
      * 返回:
      * 包含新创建的注册表和其唯一标识符的元组(Registry, Uuid)
      */
-    pub fn create_registry(&self) -> (Registry, Uuid) {
-        let registry = Registry::new();
+    pub fn create_registry(&self, prefix: Option<&str>) -> (Registry, Uuid) {
+        let registry_result = Registry::new_custom(prefix.map(|s| s.to_string()), None);
+        let registry = registry_result.expect("Create registry failed");
         let id = self.register_registry(registry.clone());
         (registry, id)
     }
@@ -257,16 +272,7 @@ impl RegistryService {
 #[derive(Clone, Debug)]
 pub struct Metrics {
     /// 接收的请求总数
-    pub requests: IntCounter,
-    
-    /// 接收的获取证明请求总数
-    pub get_attestation_requests: IntCounter,
-    
-    /// 接收的处理数据请求总数
-    pub process_data_requests: IntCounter,
-    
-    /// 接收的服务请求总数
-    pub service_requests: IntCounter,
+    pub requests: IntCounterVec,
 
     /// 按类型划分的内部错误总数
     pub errors: IntCounterVec,
@@ -293,114 +299,223 @@ pub struct Metrics {
     pub requests_per_number_of_ids: Histogram,
 }
 
-impl Metrics {
-    /**
-     * 创建新的指标实例
-     * 
-     * 在指定的Prometheus注册表中注册所有监控指标
-     * 
-     * 参数:
-     * @param registry - Prometheus注册表
-     * 
-     * 返回:
-     * 初始化的Metrics实例
-     */
-    pub fn new(registry: &Registry) -> Self {
+/// 定义指标组的枚举类型，替代字符串标识符
+/// 便于编译期检查和自动补全
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MetricGroup {
+    /// 请求相关指标组
+    Requests,
+    /// 错误相关指标组
+    Errors,
+    /// 检查点时间戳延迟指标
+    CheckpointTimestampDelay,
+    /// 获取检查点时间戳持续时间指标
+    GetCheckpointTimestampDuration,
+    /// 获取检查点时间戳状态指标
+    GetCheckpointTimestampStatus,
+    /// 获取参考gas价格状态指标
+    GetReferenceGasPriceStatus,
+    /// 检查策略持续时间指标
+    CheckPolicyDuration,
+    /// 获取包ID持续时间指标
+    FetchPkgIdsDuration,
+    /// 按ID数量统计的请求指标
+    RequestsPerNumberOfIds,
+}
+
+impl MetricGroup {
+    /// 将枚举转换为字符串标识符
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Requests => "requests",
+            Self::Errors => "errors",
+            Self::CheckpointTimestampDelay => "checkpoint_timestamp_delay",
+            Self::GetCheckpointTimestampDuration => "get_checkpoint_timestamp_duration",
+            Self::GetCheckpointTimestampStatus => "get_checkpoint_timestamp_status",
+            Self::GetReferenceGasPriceStatus => "get_reference_gas_price_status",
+            Self::CheckPolicyDuration => "check_policy_duration", 
+            Self::FetchPkgIdsDuration => "fetch_pkg_ids_duration",
+            Self::RequestsPerNumberOfIds => "requests_per_number_of_ids",
+        }
+    }
+}
+
+/// 指标构建器结构体，提供流畅的API来创建和注册指标
+pub struct MetricsBuilder {
+    /// 默认注册表，用于未指定特定注册表的指标
+    default_registry: Option<Registry>,
+    
+    /// 映射指标名称到特定注册表，使用枚举类型作为键
+    registry_map: std::collections::HashMap<MetricGroup, Registry>,
+}
+
+impl MetricsBuilder {
+    /// 创建新的指标构建器
+    pub fn new() -> Self {
         Self {
-            requests: register_int_counter_with_registry!(
-                "total_requests",
-                "获取密钥请求的总数",
-                registry
-            )
-            .expect("Failed to register requests counter"),
-            
-            get_attestation_requests: register_int_counter_with_registry!(
-                "total_get_attestation_requests",
-                "Total number of get_attestation requests received",
-                registry,
-            )
-            .expect("Failed to register get_attestation_requests counter"),
-            
-            process_data_requests: register_int_counter_with_registry!(
-                "total_process_data_requests",
-                "Total number of process_data requests received",
-                registry,
-            )
-            .expect("Failed to register process_data_requests counter"),
-            
-            errors: register_int_counter_vec_with_registry!(
-                "internal_errors",
-                "按类型划分的内部错误总数",
-                &["internal_error_type"],
-                registry
-            )
-            .unwrap(),
-            
-            service_requests: register_int_counter_with_registry!(
-                "service_requests",
-                "服务请求的总数",
-                registry
-            )
-            .unwrap(),
-            
-            checkpoint_timestamp_delay: register_histogram_with_registry!(
-                "checkpoint_timestamp_delay",
-                "最新检查点时间戳的延迟",
-                default_external_call_duration_buckets(),
-                registry
-            )
-            .unwrap(),
-            
-            get_checkpoint_timestamp_duration: register_histogram_with_registry!(
-                "checkpoint_timestamp_duration",
-                "获取最新检查点时间戳的持续时间",
-                default_external_call_duration_buckets(),
-                registry
-            )
-            .unwrap(),
-            
-            get_checkpoint_timestamp_status: register_int_counter_vec_with_registry!(
-                "checkpoint_timestamp_status",
-                "获取最新时间戳请求的状态",
-                &["status"],
-                registry,
-            )
-            .unwrap(),
-            
-            fetch_pkg_ids_duration: register_histogram_with_registry!(
-                "fetch_pkg_ids_duration",
-                "fetch_pkg_ids操作的持续时间",
-                default_fast_call_duration_buckets(),
-                registry
-            )
-            .unwrap(),
-            
-            check_policy_duration: register_histogram_with_registry!(
-                "check_policy_duration",
-                "check_policy操作的持续时间",
-                default_fast_call_duration_buckets(),
-                registry
-            )
-            .unwrap(),
-            
-            get_reference_gas_price_status: register_int_counter_vec_with_registry!(
-                "get_reference_gas_price_status",
-                "获取参考gas价格请求的状态",
-                &["status"],
-                registry
-            )
-            .unwrap(),
-            
-            requests_per_number_of_ids: register_histogram_with_registry!(
-                "requests_per_number_of_ids",
-                "按ID数量划分的请求总数",
-                buckets(0.0, 5.0, 1.0),
-                registry
-            )
-            .unwrap(),
+            default_registry: None,
+            registry_map: std::collections::HashMap::new(),
+        }
+    }
+    
+    /// 设置默认注册表
+    pub fn with_default_registry(mut self, registry: Registry) -> Self {
+        self.default_registry = Some(registry);
+        self
+    }
+    
+    /// 为特定指标名称指定注册表
+    pub fn with_registry_for(mut self, metric_group: MetricGroup, registry: Registry) -> Self {
+        self.registry_map.insert(metric_group, registry);
+        self
+    }
+    
+    /// 从RegistryService中创建构建器
+    pub fn from_registry_service(registry_service: &RegistryService) -> Self {
+        Self {
+            default_registry: Some(registry_service.default_registry()),
+            registry_map: std::collections::HashMap::new(),
         }
     }
 
+    /// 构建Metrics实例
+    pub fn build(self) -> Result<Metrics, &'static str> {
+        let default_registry = self.default_registry.ok_or("Default registry is required")?;
+
+        // 对每个指标组选择适当的注册表
+        let requests_registry = self
+            .registry_map
+            .get(&MetricGroup::Requests)
+            .unwrap_or(&default_registry);
+
+        let errors_registry = self
+            .registry_map
+            .get(&MetricGroup::Errors) 
+            .unwrap_or(&default_registry);
+
+        let checkpoint_timestamp_delay_registry = self
+            .registry_map
+            .get(&MetricGroup::CheckpointTimestampDelay)
+            .unwrap_or(&default_registry);
+
+        let get_checkpoint_timestamp_duration_registry = self
+            .registry_map
+            .get(&MetricGroup::GetCheckpointTimestampDuration)
+            .unwrap_or(&default_registry);
+
+        let get_checkpoint_timestamp_status_registry = self
+            .registry_map
+            .get(&MetricGroup::GetCheckpointTimestampStatus)
+            .unwrap_or(&default_registry);
+
+        let get_reference_gas_price_status_registry = self
+            .registry_map
+            .get(&MetricGroup::GetReferenceGasPriceStatus)
+            .unwrap_or(&default_registry);
+
+        let check_policy_duration_registry = self
+            .registry_map
+            .get(&MetricGroup::CheckPolicyDuration)
+            .unwrap_or(&default_registry);
+
+        let fetch_pkg_ids_duration_registry = self
+            .registry_map
+            .get(&MetricGroup::FetchPkgIdsDuration)
+            .unwrap_or(&default_registry);
+
+        let requests_per_number_of_ids_registry = self
+            .registry_map
+            .get(&MetricGroup::RequestsPerNumberOfIds)
+            .unwrap_or(&default_registry);
+
+        // 创建各种指标
+        let requests = register_int_counter_vec_with_registry!(
+            "citadel_requests_total",
+            "Total number of requests received",
+            &["type"],
+            requests_registry
+        )
+        .map_err(|_| "Failed to register requests counter")?;
+
+        let errors = register_int_counter_vec_with_registry!(
+            "internal_errors",
+            "按类型划分的内部错误总数",
+            &["internal_error_type"],
+            errors_registry
+        )
+        .unwrap();
+
+        let checkpoint_timestamp_delay = register_histogram_with_registry!(
+            "checkpoint_timestamp_delay",
+            "最新检查点时间戳的延迟",
+            default_external_call_duration_buckets(),
+            checkpoint_timestamp_delay_registry
+        )
+        .unwrap();
+
+        let get_checkpoint_timestamp_duration = register_histogram_with_registry!(
+            "checkpoint_timestamp_duration",
+            "获取最新检查点时间戳的持续时间",
+            default_external_call_duration_buckets(),
+            get_checkpoint_timestamp_duration_registry
+        )
+        .unwrap();
+
+        let get_checkpoint_timestamp_status = register_int_counter_vec_with_registry!(
+            "checkpoint_timestamp_status",
+            "获取最新时间戳请求的状态",
+            &["status"],
+            get_checkpoint_timestamp_status_registry
+        )
+        .unwrap();
+
+        let fetch_pkg_ids_duration = register_histogram_with_registry!(
+            "fetch_pkg_ids_duration",
+            "fetch_pkg_ids操作的持续时间",
+            default_fast_call_duration_buckets(),
+            fetch_pkg_ids_duration_registry
+        )
+        .unwrap();
+
+        let check_policy_duration = register_histogram_with_registry!(
+            "check_policy_duration",
+            "check_policy操作的持续时间",
+            default_fast_call_duration_buckets(),
+            check_policy_duration_registry
+        )
+        .unwrap();
+
+        let get_reference_gas_price_status = register_int_counter_vec_with_registry!(
+            "get_reference_gas_price_status",
+            "获取参考gas价格请求的状态",
+            &["status"],
+            get_reference_gas_price_status_registry
+        )
+        .unwrap();
+
+        let requests_per_number_of_ids = register_histogram_with_registry!(
+            "requests_per_number_of_ids",
+            "按ID数量划分的请求总数",
+            buckets(0.0, 5.0, 1.0),
+            requests_per_number_of_ids_registry
+        )
+        .unwrap();
+
+        Ok(Metrics {
+            requests,
+            errors,
+            checkpoint_timestamp_delay,
+            get_checkpoint_timestamp_duration,
+            get_checkpoint_timestamp_status,
+            get_reference_gas_price_status,
+            check_policy_duration,
+            fetch_pkg_ids_duration,
+            requests_per_number_of_ids,
+        })
+    }
+}
+
+impl Metrics {
     /**
      * 记录错误事件
      * 
@@ -412,6 +527,17 @@ impl Metrics {
     pub fn observe_error(&self, error_type: &str) {
         self.errors.with_label_values(&[error_type]).inc();
     }
+
+    /**
+     * 记录请求
+     * 
+     * 参数:
+     * @param request_type - 请求类型标识符
+     */
+    pub fn observe_request(&self, request_type: &str) {
+        self.requests.with_label_values(&[request_type]).inc();
+    }
+
 }
 
 /**

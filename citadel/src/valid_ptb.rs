@@ -15,7 +15,7 @@
  */
 
  use crate::errors::InternalError;
- use crate::types::KeyId;
+ use crate::keys::KeyId;
  use crypto::create_full_id;
  use sui_sdk::types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
  use sui_types::base_types::ObjectID;

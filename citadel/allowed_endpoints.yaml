@@ -1,3 +1,9 @@
 # External endpoints that the enclave is allowed to access. 
 endpoints:
   - api.twitter.com
+  - fullnode.devnet.sui.io
+  - fullnode.testnet.sui.io
+  - fullnode.mainnet.sui.io
+  - sui-devnet.mystenlabs.com
+  - sui-testnet.mystenlabs.com
+  - sui-mainnet.mystenlabs.com

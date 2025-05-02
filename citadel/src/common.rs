@@ -99,7 +99,7 @@ pub async fn get_attestation(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<GetAttestationResponse>, EnclaveError> {
     info!("get attestation called");
-    state.metrics.get_attestation_requests.inc();
+    state.metrics.observe_request("get_attestation");
     let pk = state.eph_kp.public();
     let fd = driver::nsm_init();
 

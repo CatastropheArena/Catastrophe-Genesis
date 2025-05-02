@@ -113,10 +113,3 @@
          }
      }
  }
-
- 
- /// 密钥ID类型（字节数组）
-pub type KeyId = Vec<u8>;
-
-/// 时间戳类型（64位无符号整数）
-pub type Timestamp = u64;
