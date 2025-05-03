@@ -12,7 +12,7 @@ const useCoreUserStore = create<UserState>()((set) => ({
   rpcUrl: "https://fullnode.testnet.sui.io/",
   setRpcUrl: (newUrl) => set({ rpcUrl: newUrl }),
 
-  network: "testnet",
+  network: `${process.env.NEXT_PUBLIC_NETWORK}` || "testnet",
   setNetwork: (newNetwork) => set({ network: newNetwork }),
 }));
 
