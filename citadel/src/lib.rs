@@ -31,16 +31,24 @@ use tracing_subscriber::{fmt, EnvFilter};
 
 pub mod app;
 pub mod cache; // 缓存系统，优化性能
+pub mod chat; // 聊天系统
 pub mod common;
 pub mod errors; // 错误类型定义
 pub mod externals; // 外部接口，如时间和gas价格
 pub mod keys; // 密钥服务器模块
 pub mod metrics;
+pub mod passport; // 用户护照系统
 pub mod signed_message; // 签名消息处理
-#[cfg(test)]
-pub mod tests;
 pub mod types; // 数据类型定义
 pub mod valid_ptb; // 可编程交易块验证 // 测试模块
+pub mod game; // 游戏模块
+pub mod tool; // 游戏工具模块
+pub mod ws; // WebSocket 会话管理模块
+pub mod gaming; // 游戏匹配模块
+pub mod cli; // 命令行接口
+pub mod txb; // 事务构建模块
+#[cfg(test)]
+pub mod tests;
 
 /// 更新最新检查点时间戳的间隔
 const CHECKPOINT_UPDATE_INTERVAL: Duration = Duration::from_secs(10);
@@ -78,17 +86,11 @@ impl AppState {
     pub async fn new() -> Self {
         // 初始化环境变量
         dotenv().ok();
-        // 初始化日志
-        Self::init_tracing_logger();
         info!("Init tracing logger, level: {:?}", Level::INFO);
         // 生成临时密钥对
         let eph_kp = Self::generate_keypair(None);
         info!("Generate ephemeral keypair: {:?}", eph_kp);
-        // 初始化网络
-        let network = env::var("NETWORK")
-            .map(|n| Network::from_str(&n))
-            .unwrap_or(Network::Testnet);
-        info!("Network: {:?}", network);
+        let network = Self::init_network();
         // 加载环境变量
         let config = Self::load_env_vars(&["API_KEY", "MASTER_KEY", "KEY_SERVER_OBJECT_ID"]);
         info!("Load env vars: {:?}", config);
@@ -153,19 +155,17 @@ impl AppState {
         }
     }
 
-    /// 初始化日志
-    fn init_tracing_logger() {
-        // 配置日志系统
-        let env_filter = EnvFilter::from_default_env()
-            .add_directive(Level::INFO.into())
-            .add_directive("nautilus_server=debug".parse().unwrap());
-
-        fmt::fmt()
-            .with_env_filter(env_filter)
-            .with_target(true)
-            .init();
-        info!("Log system initialized");
+    pub fn init_network() -> Network {
+        // 初始化网络
+        let network = env::var("NETWORK")
+            .ok()
+            .and_then(|n| if n.is_empty() { None } else { Some(n) })
+            .map(|n| Network::from_str(&n))
+            .unwrap_or(Network::Testnet);
+        info!("Network: {:?}", network);
+        network
     }
+
 
     /// 加载环境变量
     fn load_env_vars(keys: &[&str]) -> HashMap<String, String> {
@@ -438,4 +438,19 @@ macro_rules! create_metrics {
 
         builder.build().expect("Failed to build metrics with mappings")
     }};
+}
+
+
+/// 初始化日志
+pub fn init_tracing_logger() {
+    // 配置日志系统
+    let env_filter = EnvFilter::from_default_env()
+        .add_directive(Level::INFO.into())
+        .add_directive("nautilus_server=debug".parse().unwrap());
+
+    fmt::fmt()
+        .with_env_filter(env_filter)
+        .with_target(true)
+        .init();
+    info!("Log system initialized");
 }

@@ -32,6 +32,10 @@
  /// 主密钥持有证明，证明服务器确实拥有声称的主密钥
  pub type MasterKeyPOP = ibe::ProofOfPossession;
  
+
+/// 最大预算的1%
+pub const GAS_BUDGET: u64 = 500_000_000;
+
  /**
   * 网络环境枚举
   * 定义了密钥服务器可以部署和连接的不同网络环境

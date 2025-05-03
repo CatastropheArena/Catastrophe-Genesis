@@ -740,6 +740,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-ws-rooms"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "563f3eeb7bc3d367258b16216409bc0071dbe238b0f57de6b70198c5634088bb"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5217,9 +5226,12 @@ name = "nautilus-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "aws-nitro-enclaves-nsm-api",
  "axum 0.7.9",
+ "axum-ws-rooms",
  "bcs",
+ "bincode",
  "chrono",
  "clap",
  "crypto",
@@ -5227,6 +5239,8 @@ dependencies = [
  "dashmap",
  "dotenv",
  "fastcrypto",
+ "futures",
+ "futures-util",
  "hex 0.4.3",
  "itertools 0.13.0",
  "lru 0.13.0",
@@ -5244,6 +5258,7 @@ dependencies = [
  "serde_with",
  "serde_yaml 0.9.34+deprecated",
  "shared-crypto",
+ "sui-keys",
  "sui-move-build",
  "sui-sdk",
  "sui-types",

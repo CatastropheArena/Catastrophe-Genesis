@@ -37,15 +37,12 @@ use crate::externals::{current_epoch_time, fetch_first_and_last_pkg_id};
 use crate::metrics::call_with_duration;
 use crate::metrics::Metrics;
 use crate::signed_message::{signed_message, signed_request};
-use crate::types::{ElGamalPublicKey, ElgamalEncryption, ElgamalVerificationKey, MasterKeyPOP};
+use crate::types::{ElGamalPublicKey, ElgamalEncryption, ElgamalVerificationKey, MasterKeyPOP, GAS_BUDGET};
 use crate::valid_ptb::ValidPtb;
 use crate::AppState;
 
 /// 会话密钥的最大生存时间（分钟）
 const SESSION_KEY_TTL_MAX: u16 = 10;
-
-/// 最大预算的1%
-const GAS_BUDGET: u64 = 500_000_000;
 
 /// 允许的全节点数据过时时间
 /// 设置此持续时间时，注意Sui上的时间戳可能比当前时间稍晚，但不应超过一秒。
