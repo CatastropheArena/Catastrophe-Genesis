@@ -15,8 +15,8 @@ import { useMemo } from "react";
 import useMeidaSize from "@/hooks/useMediaSize";
 import { ClipboardCopyIcon } from "lucide-react";
 import { toast } from "react-toastify";
-import RpcMenu from "./rpcMenu";
-import NetworkMenu from "./networkMenu";
+// import RpcMenu from "./rpcMenu";
+// import NetworkMenu from "./networkMenu";
 
 const ConnectMenu = ({
   walletAddress,
