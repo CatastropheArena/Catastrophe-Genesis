@@ -32,7 +32,7 @@ export default function Header() {
       if (isCorrectNetwork === false) {
         setShowNetworkDialog(true);
         setShowWelcomeDialog(false);
-      } else if (isCorrectNetwork === true && hasPassport === false) {
+      } else if (isCorrectNetwork === true && hasPassport === true) {
         setShowNetworkDialog(false);
         setShowWelcomeDialog(true);
       }

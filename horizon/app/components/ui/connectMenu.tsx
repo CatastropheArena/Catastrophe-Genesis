@@ -93,9 +93,9 @@ const ConnectMenu = ({
             </Link>
           </DropdownMenuItem>
           {/* Network Setting */}
-          <NetworkMenu />
+          {/* <NetworkMenu /> */}
           {/* RPC Setting */}
-          <RpcMenu />
+          {/* <RpcMenu /> */}
           {/* <DropdownMenuSeparator className="bg-white h-[1px] w-full m-0 p-0" /> */}
           {/* Disconnect */}
           <DropdownMenuItem className="DropdownMenuItem w-full">
