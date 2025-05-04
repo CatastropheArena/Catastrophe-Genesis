@@ -7,28 +7,28 @@ import {
 import { type StateStorage } from "zustand/middleware";
 import { useUserStore } from "@/stores/useUserStore";
 import { toast } from "react-toastify";
+import { networkConfig, network } from "@/contracts";
 
 type Props = {
   children: React.ReactNode;
 };
 
+const defaultNetwork = networkConfig[network].name;
+
 const SuiWalletProvider = ({ children }: Props) => {
-  const { rpcUrl } = useUserStore();
-
-  const networks = {
-    custom: { url: rpcUrl },
-  };
-
   if (typeof window === "undefined") return <></>;
   return (
     <>
-      <SuiClientProvider networks={networks} defaultNetwork="custom">
+      <SuiClientProvider
+        networks={networkConfig}
+        defaultNetwork={defaultNetwork}
+      >
         <WalletProvider
           theme={lightTheme}
           autoConnect={true}
           storage={localStorage as StateStorage}
           storageKey="sui-wallet"
-          preferredWallets={["Sui Wallet"]}
+          preferredWallets={["Slash Wallet"]}
           stashedWallet={{
             name: "Catastrophe Genesis",
           }}

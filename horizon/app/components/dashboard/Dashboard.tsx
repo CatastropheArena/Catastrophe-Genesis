@@ -21,6 +21,11 @@ import {
   StakingPool,
   StakedCard,
 } from "@/app/types";
+import { useToast } from "@/components/ui/use-toast";
+import { useUserCards } from "@/hooks/useUserCards";
+import { useBetterSignAndExecuteTransaction } from "@/hooks/useBetterTx";
+import { Transaction } from "@mysten/sui/transactions";
+import { useUserBalance } from "@/hooks/useUserBalance";
 
 // Import components
 import CardCollection from "./components/card-collection";
@@ -142,7 +147,43 @@ interface DialogStateType {
 
 export default function Dashboard() {
   const router = useRouter();
+  const { toast } = useToast();
+  const {
+    cards,
+    isLoading: isLoadingCards,
+    error: cardsError,
+    fetchCards,
+  } = useUserCards();
+  const { handleSignAndExecuteTransaction, isLoading: isExecuting } =
+    useBetterSignAndExecuteTransaction({
+      tx: () => {
+        // Find a coin with sufficient balance
+        const paymentCoin = fishBalance.coins.find(
+          (coin) => BigInt(coin.balance) >= BigInt(1000)
+        );
+        if (!paymentCoin) {
+          throw new Error("No single coin object has sufficient balance");
+        }
+
+        const tx = new Transaction();
+        tx.moveCall({
+          target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::card::draw_card`,
+          arguments: [
+            tx.object("0x8"),
+            tx.object(paymentCoin.coinObjectId),
+            tx.object(`${process.env.NEXT_PUBLIC_TESTNET_TREASURY}`),
+            tx.object("0x6"),
+          ],
+        });
+        return tx;
+      },
+    });
   const account = useCurrentAccount();
+  const {
+    balance: fishBalance,
+    isLoading: isLoadingBalance,
+    refetch: refetchBalance,
+  } = useUserBalance();
 
   // State management
   const [assets, setAssets] = useState({
@@ -174,11 +215,11 @@ export default function Dashboard() {
 
   // Collection functions
   const handleGetMoreClick = () => {
-    if (assets.coins < 100) {
+    if (fishBalance.totalBalance < BigInt(1000)) {
       setDialogState({
         open: true,
-        title: "Insufficient Funds",
-        description: "You need 100 coins to purchase a card pack.",
+        title: "Insufficient Balance",
+        description: "You need 1000 FISH tokens to purchase a card.",
         type: "error",
         confirmText: "OK",
         data: null,
@@ -189,12 +230,13 @@ export default function Dashboard() {
 
     setDialogState({
       open: true,
-      title: "Get More Cards",
-      description: "Would you like to purchase a card pack for 100 coins?",
+      title: "Purchase Card",
+      description:
+        "Would you like to spend 1000 FISH tokens to draw a new card?",
       type: "confirm",
       confirmText: "Purchase",
       cancelText: "Cancel",
-      data: null,
+      data: { action: "drawCard" },
       isLoading: false,
     });
   };
@@ -347,6 +389,110 @@ export default function Dashboard() {
     }
   }, [account, router]);
 
+  // 修改 DialogModal 的 confirmAction
+  const handleDialogConfirm = async () => {
+    const { type, data } = dialogState;
+
+    switch (type) {
+      case "confirm":
+        if (data?.action === "drawCard") {
+          setDialogState((prev) => ({ ...prev, isLoading: true }));
+          try {
+            await handleSignAndExecuteTransaction()
+              .beforeExecute(async () => {
+                // Recheck balance before executing
+                await refetchBalance();
+                if (fishBalance.totalBalance < BigInt(1000)) {
+                  throw new Error("Insufficient balance");
+                }
+                return true;
+              })
+              .onSuccess(async () => {
+                toast({
+                  title: "Success",
+                  description: "Successfully drew a new card!",
+                  variant: "default",
+                });
+                // Refresh card list and balance
+                await Promise.all([fetchCards(), refetchBalance()]);
+              })
+              .onError((error) => {
+                toast({
+                  title: "Error",
+                  description: error.message || "Failed to draw card",
+                  variant: "destructive",
+                });
+              })
+              .execute();
+          } catch (error) {
+            toast({
+              title: "Error",
+              description:
+                error instanceof Error ? error.message : "Failed to draw card",
+              variant: "destructive",
+            });
+          } finally {
+            setDialogState((prev) => ({
+              ...prev,
+              isLoading: false,
+              open: false,
+            }));
+          }
+        } else if (data?.card) {
+          // Rental confirmation
+          setAssets((prev) => ({
+            ...prev,
+            coins: prev.coins - data.cost,
+          }));
+          const rentedCard: RentedCardData = {
+            ...data.card,
+            usesLeft: data.uses,
+            totalUses: data.uses,
+            expiresIn: data.period,
+          };
+          setMyRentedCards((prev) => [...prev, rentedCard]);
+          setDialogState((prev) => ({ ...prev, open: false }));
+        } else if (data?.id && data.level) {
+          // Game join confirmation
+          setAssets((prev) => ({
+            ...prev,
+            coins: prev.coins - data.entryFee,
+          }));
+          router.push(`/game/${data.id}`);
+          setDialogState((prev) => ({ ...prev, open: false }));
+        }
+        break;
+
+      case "stakeInput":
+        if (data?.pool) {
+          const amountInput = document.getElementById(
+            "stakeAmount"
+          ) as HTMLInputElement;
+          const amount = Number(amountInput?.value || "0");
+          if (amount > 0) {
+            const stakedCard: StakedCard = {
+              ...data.pool,
+              stakedCount: amount,
+              poolShare: "0%",
+              earned: 0,
+              stakedAmount: amount,
+            };
+            setMyStakedCards((prev) => [...prev, stakedCard]);
+            setAssets((prev) => ({
+              ...prev,
+              cards: prev.cards.map((c) =>
+                c.name === data.pool.name.replace(" Pool", "")
+                  ? { ...c, count: c.count - amount }
+                  : c
+              ),
+            }));
+          }
+          setDialogState((prev) => ({ ...prev, open: false }));
+        }
+        break;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-900 via-violet-800 to-indigo-900 text-white">
       <div className="container mx-auto px-4 py-8">
@@ -464,64 +610,7 @@ export default function Dashboard() {
           data={dialogState.data}
           isLoading={dialogState.isLoading}
           onOpenChange={(open) => setDialogState((prev) => ({ ...prev, open }))}
-          confirmAction={async () => {
-            const { type, data } = dialogState;
-
-            switch (type) {
-              case "confirm":
-                if (data?.card) {
-                  // Rental confirmation
-                  setAssets((prev) => ({
-                    ...prev,
-                    coins: prev.coins - data.cost,
-                  }));
-                  const rentedCard: RentedCardData = {
-                    ...data.card,
-                    usesLeft: data.uses,
-                    totalUses: data.uses,
-                    expiresIn: data.period,
-                  };
-                  setMyRentedCards((prev) => [...prev, rentedCard]);
-                } else if (data?.id && data.level) {
-                  // Game join confirmation
-                  setAssets((prev) => ({
-                    ...prev,
-                    coins: prev.coins - data.entryFee,
-                  }));
-                  router.push(`/game/${data.id}`);
-                }
-                break;
-
-              case "stakeInput":
-                if (data?.pool) {
-                  const amountInput = document.getElementById(
-                    "stakeAmount"
-                  ) as HTMLInputElement;
-                  const amount = Number(amountInput?.value || "0");
-                  if (amount > 0) {
-                    const stakedCard: StakedCard = {
-                      ...data.pool,
-                      stakedCount: amount,
-                      poolShare: "0%",
-                      earned: 0,
-                      stakedAmount: amount,
-                    };
-                    setMyStakedCards((prev) => [...prev, stakedCard]);
-                    setAssets((prev) => ({
-                      ...prev,
-                      cards: prev.cards.map((c) =>
-                        c.name === data.pool.name.replace(" Pool", "")
-                          ? { ...c, count: c.count - amount }
-                          : c
-                      ),
-                    }));
-                  }
-                }
-                break;
-            }
-
-            setDialogState((prev) => ({ ...prev, open: false }));
-          }}
+          confirmAction={handleDialogConfirm}
         />
       </div>
     </div>

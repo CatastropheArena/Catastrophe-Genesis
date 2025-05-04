@@ -15,8 +15,8 @@ import { useMemo } from "react";
 import useMeidaSize from "@/hooks/useMediaSize";
 import { ClipboardCopyIcon } from "lucide-react";
 import { toast } from "react-toastify";
-import RpcMenu from "./rpcMenu";
-import NetworkMenu from "./networkMenu";
+// import RpcMenu from "./rpcMenu";
+// import NetworkMenu from "./networkMenu";
 
 const ConnectMenu = ({
   walletAddress,
@@ -93,9 +93,9 @@ const ConnectMenu = ({
             </Link>
           </DropdownMenuItem>
           {/* Network Setting */}
-          <NetworkMenu />
+          {/* <NetworkMenu /> */}
           {/* RPC Setting */}
-          <RpcMenu />
+          {/* <RpcMenu /> */}
           {/* <DropdownMenuSeparator className="bg-white h-[1px] w-full m-0 p-0" /> */}
           {/* Disconnect */}
           <DropdownMenuItem className="DropdownMenuItem w-full">
