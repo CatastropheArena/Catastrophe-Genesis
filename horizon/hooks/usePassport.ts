@@ -3,12 +3,16 @@ import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { useBetterSignAndExecuteTransaction } from "./useBetterTx";
 import { toast } from "react-toastify";
+import { useUserAssets } from "./useUserAssets";
+import { SuiObjectData, SuiTransactionBlockResponse } from "@mysten/sui/client";
 
 export const usePassport = () => {
   const [hasPassport, setHasPassport] = useState<boolean | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const { assets, fetchAssets } = useUserAssets();
+  const [passport, setPassport] = useState<Passport | null>(null);
 
   const client = useSuiClient();
   const account = useCurrentAccount();
@@ -35,34 +39,56 @@ export const usePassport = () => {
 
   // Check if user has passport
   const checkPassport = async () => {
-    if (!account?.address) return;
+    if (!account?.address) {
+      setHasPassport(null);
+      setPassport(null);
+      return;
+    }
 
+    setIsChecking(true);
     try {
       const objects = await client.getOwnedObjects({
         owner: account.address,
-        filter: {
-          MatchAll: [
-            {
-              Package: process.env.NEXT_PUBLIC_TESTNET_PACKAGE!,
-            },
-            {
-              MoveModule: {
-                module: "passport",
-                package: process.env.NEXT_PUBLIC_TESTNET_PACKAGE!,
-              },
-            },
-          ],
-        },
         options: {
           showContent: true,
         },
+        filter: {
+          MatchAny: [
+            {
+              StructType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::passport::Passport`,
+            },
+          ],
+        },
       });
 
-      setHasPassport(objects.data.length > 0);
+      let foundPassport = false;
+      objects.data.forEach((object) => {
+        const data = object.data as unknown as SuiObjectData;
+        if (data.content?.dataType !== "moveObject") {
+          return;
+        }
+        const contentType = data.content?.type;
+        if (
+          contentType ===
+          `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::passport::Passport`
+        ) {
+          foundPassport = true;
+          setHasPassport(true);
+          setPassport(data.content?.fields as unknown as Passport);
+        }
+      });
+
+      if (!foundPassport) {
+        setHasPassport(false);
+        setPassport(null);
+      }
     } catch (err) {
       console.error("Failed to check passport:", err);
       setError("Failed to check passport status");
       toast.error("Failed to check passport status");
+      setHasPassport(null);
+    } finally {
+      setIsChecking(false);
     }
   };
 
@@ -70,55 +96,58 @@ export const usePassport = () => {
   const createNewUser = async () => {
     if (!account?.address) return false;
 
-    setIsCreating(true);
     setError(null);
     setSuccess(false);
 
     try {
-      await handleSignAndExecuteTransaction()
-        .beforeExecute(async () => {
-          // Check passport status again before executing transaction
-          await checkPassport();
-          if (hasPassport) {
-            toast.info("You already have a passport");
-            return false;
-          }
-          return true;
-        })
-        .onSuccess(async () => {
-          toast.success("Passport created successfully!");
-          await checkPassport();
-          setSuccess(true);
-        })
-        .onError((err) => {
-          console.error("Failed to create passport:", err);
-          setError(err.message || "Failed to create passport");
-          toast.error("Failed to create passport");
-          setSuccess(false);
-        })
-        .execute();
+      const result: void | SuiTransactionBlockResponse =
+        await handleSignAndExecuteTransaction()
+          .beforeExecute(async () => {
+            // Check passport status again before executing transaction
+            await checkPassport();
+            if (hasPassport) {
+              toast.info("You already have a passport");
+              return false;
+            }
+            return true;
+          })
+          .onSuccess(async () => {
+            // First update passport status
+            await checkPassport();
 
-      return success;
+            // Then update assets and set success state
+            await fetchAssets();
+            setSuccess(true);
+            toast.success("Passport created successfully!");
+          })
+          .onError((err) => {
+            console.error("Failed to create passport:", err);
+            setError(err.message || "Failed to create passport");
+            toast.error(err.message || "Failed to create passport");
+            setSuccess(false);
+          })
+          .execute();
+
+      return result?.effects?.status?.status === "success";
     } catch (err: any) {
       console.error("Failed to create new user:", err);
-      setError(err.message || "Failed to create user");
-      toast.error(err.message || "Failed to create user");
+      setError(err.message || "Failed to create passport");
+      toast.error(err.message || "Failed to create passport");
       return false;
-    } finally {
-      setIsCreating(false);
     }
   };
 
+  // Check passport when wallet changes
   useEffect(() => {
-    if (account?.address) {
-      checkPassport();
-    }
+    checkPassport();
   }, [account?.address]);
 
   return {
     hasPassport,
-    isCreating: isLoading || isCreating,
+    isCreating: isLoading,
+    isChecking,
     error,
+    success,
     createNewUser,
     checkPassport,
   };

@@ -28,7 +28,7 @@ export function useUserBalance() {
       // Get all coin objects owned by the user
       const { data: coins } = await client.getCoins({
         owner: account.address,
-        coinType: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::fish::FISH`,
+        coinType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::fish::FISH`,
       });
 
       // Calculate total balance

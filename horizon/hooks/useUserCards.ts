@@ -24,7 +24,7 @@ export function useUserCards() {
         filter: {
           MatchAll: [
             {
-              StructType: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::card::Card`,
+              StructType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::card::Card`,
             },
           ],
         },
