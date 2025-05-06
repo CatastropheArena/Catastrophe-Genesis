@@ -8,6 +8,7 @@
  * 1. 请求验证错误 - 如无效的PTB、签名或包ID
  * 2. 访问控制错误 - 如无权访问特定密钥
  * 3. 服务器内部错误 - 如系统故障
+ * 4. JWT令牌验证错误 - 如无效或过期的令牌
  * 
  * 每种错误类型都映射到特定的HTTP状态码和错误消息，以提供清晰的客户端反馈。
  */
@@ -39,6 +40,24 @@
      InvalidCertificate,
      /// 服务器内部错误，稍后重试
      Failure,
+     /// 客户端不是最新版本
+     SuiClientNotFresh,
+     /// 无效的输入
+     InvalidInput,
+     /// 解密错误
+     DecryptionError,
+     
+     // ===== JWT令牌验证错误 =====
+     /// JWT令牌无效（签名验证失败、格式错误等）
+     InvalidToken,
+     /// JWT令牌已过期
+     ExpiredToken,
+     /// 请求头中缺少Authorization令牌
+     MissingAuthToken,
+     /// Authorization请求头格式无效
+     InvalidAuthHeader,
+     /// 用户无权访问请求的资源
+     Unauthorized,
  }
  
  /**
@@ -76,6 +95,40 @@
                  StatusCode::SERVICE_UNAVAILABLE,
                  "Internal server error, please try again later",
              ),
+             InternalError::SuiClientNotFresh => (
+                 StatusCode::FORBIDDEN,
+                 "Client is not up-to-date, please update to the latest version",
+             ),
+             InternalError::InvalidInput => (
+                 StatusCode::FORBIDDEN,
+                 "Invalid input",
+             ),
+             InternalError::DecryptionError => (
+                 StatusCode::FORBIDDEN,
+                 "Decryption error",
+             ),
+             
+             // JWT令牌验证错误
+             InternalError::InvalidToken => (
+                 StatusCode::UNAUTHORIZED,
+                 "Invalid authentication token",
+             ),
+             InternalError::ExpiredToken => (
+                 StatusCode::UNAUTHORIZED,
+                 "Authentication token has expired",
+             ),
+             InternalError::MissingAuthToken => (
+                 StatusCode::UNAUTHORIZED,
+                 "Authentication token is missing",
+             ),
+             InternalError::InvalidAuthHeader => (
+                 StatusCode::UNAUTHORIZED,
+                 "Invalid Authorization header format",
+             ),
+             InternalError::Unauthorized => (
+                 StatusCode::FORBIDDEN,
+                 "User is not authorized to access this resource",
+             ),
          };
  
          let error_response = ErrorResponse {
@@ -94,15 +147,24 @@
  impl InternalError {
      pub fn as_str(&self) -> &'static str {
          match self {
-             InternalError::InvalidPTB => "InvalidPTB",
-             InternalError::InvalidPackage => "InvalidPackage",
-             InternalError::NoAccess => "NoAccess",
-             InternalError::InvalidCertificate => "InvalidCertificate",
-             InternalError::OldPackageVersion => "OldPackageVersion",
-             InternalError::InvalidSignature => "InvalidSignature",
-             InternalError::InvalidSessionSignature => "InvalidSessionSignature",
-             InternalError::Failure => "Failure",
-         }
+            InternalError::InvalidPTB => "InvalidPTB",
+            InternalError::InvalidPackage => "InvalidPackage",
+            InternalError::NoAccess => "NoAccess",
+            InternalError::InvalidCertificate => "InvalidCertificate",
+            InternalError::OldPackageVersion => "OldPackageVersion",
+            InternalError::InvalidSignature => "InvalidSignature",
+            InternalError::InvalidSessionSignature => "InvalidSessionSignature",
+            InternalError::Failure => "Failure",
+            InternalError::SuiClientNotFresh => "SuiClientNotFresh",
+            InternalError::InvalidInput => "InvalidInput",
+            InternalError::DecryptionError => "DecryptionError",
+            // JWT令牌验证错误
+            InternalError::InvalidToken => "InvalidToken",
+            InternalError::ExpiredToken => "ExpiredToken",
+            InternalError::MissingAuthToken => "MissingAuthToken",
+            InternalError::InvalidAuthHeader => "InvalidAuthHeader",
+            InternalError::Unauthorized => "Unauthorized",
+        }
      }
  }
  

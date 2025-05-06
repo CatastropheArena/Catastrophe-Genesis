@@ -6,3 +6,11 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+type RpcNode = {
+  name: string;
+  url: string;
+  latency: number;
+};
+
+type Network = "mainnet" | "testnet" | "devnet";

@@ -47,6 +47,7 @@ pub mod ws; // WebSocket 会话管理模块
 pub mod gaming; // 游戏匹配模块
 pub mod cli; // 命令行接口
 pub mod txb; // 事务构建模块
+pub mod catastrophe; // 游戏模块
 #[cfg(test)]
 pub mod tests;
 

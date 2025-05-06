@@ -15,32 +15,6 @@
 //! - **游戏查询**: 查询用户当前进行中的游戏
 //! - **用户补充信息**: 提供用户状态和活动信息的统一查询接口
 //! 
-//! ## 事件定义
-//! 
-//! ### 客户端事件
-//! ```
-//! SEND_FRIEND_REQUEST: "user:send-friend-request"
-//! REVOKE_FRIEND_REQUEST: "user:revoke-friend-request"
-//! ACCEPT_FRIEND_REQUEST: "user:accept-friend-request"
-//! REJECT_FRIEND_REQUEST: "user:reject-friend-request"
-//! UNFRIEND: "user:unfriend"
-//! BLOCK: "user:block"
-//! UNBLOCK: "user:unblock"
-//! GET_SUPPLEMENTAL: "user:get-supplemental"
-//! SET_INTERIM: "user:set-interim"
-//! ```
-//! 
-//! ### 服务端事件
-//! ```
-//! ONLINE: "user:online"
-//! OFFLINE: "user:offline"
-//! FRIEND_REQUEST_RECEIVED: "user:friend-request-received"
-//! FRIEND_REQUEST_ACCEPTED: "user:friend-request-accepted"
-//! FRIEND_REQUEST_REJECTED: "user:friend-request-rejected"
-//! FRIEND_REQUEST_REVOKED: "user:friend-request-revoked"
-//! UNFRIENDED: "user:unfriended"
-//! ```
-//! 
 //! ## 技术说明
 //! 
 //! - **WebSocket集成**: 与WebSocket系统无缝集成，实现实时状态更新和事件通知
@@ -48,7 +22,6 @@
 //! - **关系管理**: 提供高效的关系状态转换和管理功能
 //! - **会话追踪**: 支持多设备登录和离线检测
 //! - **游戏状态**: 跟踪和更新用户当前游戏状态
-//! - **与NestJS兼容**: 实现与前端NestJS系统兼容的数据格式和事件处理
 //! 
 //! ## 使用示例
 //! 

@@ -166,3 +166,149 @@ export interface AuthResponse {
 4. 监听认证状态变化以触发相应的UI更新和重定向
 5. 确保所有异步认证操作都有适当的加载状态和错误处理
 6. 在用户操作前验证认证状态，避免未授权访问 
+
+# 基于SessionKey的认证功能
+
+## 概述
+
+爆炸猫游戏采用基于区块链的SessionKey认证机制，取代传统的用户名密码认证方式。这种机制结合了钱包签名验证和游戏通行证(GameEntry)系统，提供了更安全且符合区块链游戏特性的用户认证体验。
+
+## 核心功能
+
+- **钱包连接认证**: 使用SUI钱包进行身份验证，无需记忆密码
+- **会话密钥机制**: 生成临时会话密钥用于授权访问，有效期限定
+- **游戏通行证集成**: 与Nexus模块的GameEntry系统无缝集成
+- **自动护照创建**: 检测用户是否拥有游戏护照，无则引导创建
+
+## 技术原理
+
+### SessionKey认证流程
+
+1. **连接钱包**: 用户连接SUI钱包，获取钱包地址
+2. **生成会话密钥**: 创建临时Ed25519密钥对作为会话密钥
+3. **用户授权**: 通过钱包签名特定消息授权会话
+4. **服务端验证**: 后端验证签名有效性并检查游戏通行证
+5. **返回凭证**: 返回访问令牌和用户状态信息
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Wallet as 钱包
+    participant Client as 客户端
+    participant Server as 服务端
+    participant Chain as 区块链
+    
+    User->>Client: 点击"连接钱包"
+    Client->>Wallet: 请求连接
+    Wallet-->>User: 请求授权
+    User->>Wallet: 确认连接
+    Wallet-->>Client: 返回地址和公钥
+    
+    Client->>Client: 生成SessionKey
+    Client->>Wallet: 请求签名消息
+    Wallet-->>User: 显示签名请求
+    User->>Wallet: 确认签名
+    Wallet-->>Client: 返回签名
+    
+    Client->>Server: 发送签名和会话信息
+    Server->>Server: 验证签名
+    Server->>Chain: 检查游戏通行证
+    Chain-->>Server: 返回游戏通行证状态
+    
+    alt 有游戏通行证
+        Server-->>Client: 返回访问令牌
+        Client->>User: 登录成功，进入游戏
+    else 无游戏通行证
+        Server-->>Client: 返回需创建通行证
+        Client->>User: 引导创建游戏通行证
+    end
+```
+
+### 数据对象
+
+**SessionKey对象结构**:
+```typescript
+class SessionKey {
+  // 私有属性
+  private address: string;        // 用户钱包地址
+  private packageId: string;      // 合约包ID
+  private creationTimeMs: number; // 创建时间戳
+  private ttlMin: number;         // 有效期(分钟)
+  private sessionKey: Ed25519Keypair; // 会话密钥对
+  private personalMessageSignature?: string; // 用户签名
+  
+  // 公开方法
+  getAddress(): string;
+  getPackageId(): string;
+  getPersonalMessage(): Uint8Array;
+  setPersonalMessageSignature(signature: string): void;
+  getCertificate(): Certificate;
+  isExpired(): boolean;
+  // ...其他方法
+}
+```
+
+**证书对象结构**:
+```typescript
+interface Certificate {
+  user: string;            // 用户钱包地址
+  sessionKey: string;      // 会话公钥(Base64)
+  creationTime: number;    // 创建时间戳
+  ttlMin: number;          // 有效期(分钟)
+  signature: string;       // 用户签名
+}
+```
+
+## 用法示例
+
+### 基本认证流程
+
+```typescript
+// 1. 连接钱包
+await requestSigner.connect();
+const address = requestSigner.getAddress();
+
+// 2. 创建会话密钥
+const sessionKey = new SessionKey({
+  address,
+  packageId: PACKAGE_ID,
+  ttlMin: 10
+});
+
+// 3. 请求用户签名
+await sessionKey.requestSignature();
+
+// 4. 获取证书并发送到服务器验证
+const certificate = sessionKey.getCertificate();
+const authResult = await authApi.sessionKeyAuth({
+  signature: certificate.signature,
+  sessionKey: certificate.sessionKey,
+  address: certificate.user,
+  timestamp: certificate.creationTime,
+  ttlMin: certificate.ttlMin
+});
+
+// 5. 处理认证结果
+if (authResult.hasGameEntry) {
+  // 正常进入游戏
+} else {
+  // 引导创建游戏通行证
+}
+```
+
+## 与游戏系统集成
+
+本认证系统与Citadel和Nexus模块无缝集成，实现了以下功能：
+
+1. **通行证验证**: 使用Nexus模块的GameEntry系统验证用户身份
+2. **护照绑定**: 将游戏通行证与用户护照关联
+3. **权限管理**: 基于链上状态控制用户访问权限
+4. **数据持久化**: 用户数据在区块链上安全存储
+
+## 安全考量
+
+1. **无密码存储**: 不需要在服务器存储密码，降低数据泄露风险
+2. **时效性授权**: 会话密钥有严格的时间限制，降低长期风险
+3. **链上验证**: 关键权限验证在链上执行，提高安全性
+4. **隔离性**: 每个应用程序需要单独授权，互不影响
+5. **签名验证**: 所有操作需要用户显式签名确认 

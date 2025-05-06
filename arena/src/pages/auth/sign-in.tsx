@@ -1,18 +1,17 @@
-import React from "react";
-import {styled, FormControl} from "@mui/material";
-import {Link} from "react-router-dom";
-import {useForm} from "react-hook-form";
-import {useSnackbar} from "notistack";
+import React, { useEffect, useState } from "react";
+import { styled } from "@mui/material";
+import { Link, useNavigate } from "react-router-dom";
+import { useSnackbar } from "notistack";
 
-import {useDispatch} from "@app/store";
-import {authModel} from "@features/auth";
+// import { useDispatch } from "@app/store";
+// import { authModel } from "@features/auth";
 
-import {Fullscreen, Center} from "@shared/ui/templates";
-import {Layout} from "@shared/lib/layout";
-import {H4, Input, Text, Label, Button, Loader} from "@shared/ui/atoms";
-import {Icon} from "@shared/ui/icons";
-import {viewerModel} from "@entities/viewer";
-import {socket} from "@shared/lib/ws";
+import { Fullscreen, Center } from "@shared/ui/templates";
+import { Layout } from "@shared/lib/layout";
+import { H4, Text, Button, Loader } from "@shared/ui/atoms";
+import { Icon } from "@shared/ui/icons";
+import { viewerModel } from "@entities/viewer";
+// import { SessionKey } from "@features/auth/lib/session-key";
 
 export const SignInPage: React.FC = () => (
   <Fullscreen>
@@ -20,9 +19,9 @@ export const SignInPage: React.FC = () => (
       <Layout.Col w={40} gap={2}>
         <Layout.Col gap={1}>
           <Layout.Row align="center" gap={1}>
-            <LoginIcon />
+            <WalletIcon />
 
-            <H4>sign in</H4>
+            <H4>Wallet Login</H4>
           </Layout.Row>
 
           <Text
@@ -31,16 +30,16 @@ export const SignInPage: React.FC = () => (
             weight={700}
             transform="uppercase"
           >
-            Log in with your existing account.
+            Connect with your wallet to log in to the Explosion Cat game.
           </Text>
         </Layout.Col>
 
-        <SignInForm />
+        <SignInWithWallet />
 
         <Details>
           <Layout.Row align="center" gap={1}>
-            <Help>no account?</Help>
-            <SignInLink to="/register">go sign up here.</SignInLink>
+            <Help>No passport?</Help>
+            <SignInLink to="/register">Click here to create one.</SignInLink>
           </Layout.Row>
         </Details>
       </Layout.Col>
@@ -48,110 +47,139 @@ export const SignInPage: React.FC = () => (
   </Fullscreen>
 );
 
-const LoginIcon = styled(Icon.Login)`
+const WalletIcon = styled(Icon.Login)`
   width: 4rem;
   fill: ${({theme}) => theme.palette.text.primary};
 `;
 
-interface SignInFormInputs {
-  username: string;
-  password: string;
-}
-
-const SignInForm: React.FC = () => {
+const SignInWithWallet: React.FC = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
 
-  const {enqueueSnackbar} = useSnackbar();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-
-  const {handleSubmit, formState, register} = useForm<SignInFormInputs>({
-    mode: "onChange",
-    defaultValues: {
-      username: "",
-      password: "",
-    },
-  });
-
-  const form = {
-    username: register("username", {
-      required: {
-        value: true,
-        message: "username is required",
-      },
-    }),
-    password: register("password", {
-      required: {
-        value: true,
-        message: "password is required",
-      },
-    }),
+  // Connect wallet
+  const handleConnectWallet = async () => {
+    try {
+      setIsSubmitting(true);
+      await requestSigner.connect();
+      const address = requestSigner.getAddress();
+      
+      if (!address) {
+        throw new Error('Unable to get wallet address');
+      }
+      
+      setWalletAddress(address);
+      setWalletConnected(true);
+      enqueueSnackbar('Wallet connected successfully', { variant: 'success' });
+    } catch (error) {
+      console.error('Wallet connection failed:', error);
+      enqueueSnackbar('Failed to connect wallet, please try again', { variant: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleFormSubmit = (data: SignInFormInputs) => {
-    setIsSubmitting(true);
-
-    dispatch(authModel.actions.signIn(data))
-      .unwrap()
-      .then((res) => {
-        dispatch(
-          viewerModel.actions.setCredentials({credentials: res.credentials}),
-        );
-
-        socket.disconnect();
-        socket.connect();
-      })
-      .catch((error) => {
-        enqueueSnackbar(error, {
-          variant: "error",
-        });
-      })
-      .finally(() => {
-        setIsSubmitting(false);
+  // Login with session key
+  const handleSessionKeyLogin = async () => {
+    try {
+      setIsSubmitting(true);
+      
+      if (!walletAddress) {
+        throw new Error('Wallet address not obtained');
+      }
+      
+      // Create SessionKey
+      const sessionKey = new SessionKey({
+        address: walletAddress,
+        packageId: PACKAGE_ID,
       });
+      
+      // Request user signature
+      await sessionKey.requestSignature();
+      
+      // Get certificate
+      const certificate = sessionKey.getCertificate();
+      
+      // Send to server for verification
+      const result = await dispatch(
+        authModel.actions.sessionKeyAuth({
+          signature: certificate.signature,
+          sessionKey: certificate.sessionKey,
+          address: certificate.user,
+          timestamp: certificate.creationTime,
+          ttlMin: certificate.ttlMin,
+        })
+      ).unwrap();
+      
+      // Set user credentials
+      dispatch(
+        viewerModel.actions.setCredentials({ credentials: result.credentials })
+      );
+      
+      enqueueSnackbar('Login successful', { variant: 'success' });
+      
+      // If no game entry, redirect to create passport page
+      if (!result.hasGameEntry) {
+        navigate('/create-passport');
+      } else {
+        navigate('/');
+      }
+      
+    } catch (error) {
+      console.error('Login failed:', error);
+      enqueueSnackbar('Login failed, please try again', { variant: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)}>
-      <Layout.Col gap={2}>
-        <FormControl variant="standard">
-          <Label shrink htmlFor="username">
-            username
-          </Label>
-
-          <Input
-            {...form.username}
-            placeholder="iffypixy"
-            id="username"
-            type="text"
-          />
-        </FormControl>
-
-        <FormControl variant="standard">
-          <Label shrink htmlFor="password">
-            password
-          </Label>
-          <Input
-            {...form.password}
-            placeholder="XXXXXXXXXXX"
-            id="password"
-            type="password"
-          />
-        </FormControl>
-
+    <Layout.Col gap={2}>
+      {!walletConnected ? (
         <Button
-          type="submit"
           variant="contained"
           startIcon={isSubmitting && <Spinner />}
-          endIcon={!isSubmitting && <StartIcon />}
-          disabled={!formState.isValid || isSubmitting}
+          endIcon={!isSubmitting && <WalletConnectIcon />}
+          onClick={handleConnectWallet}
+          disabled={isSubmitting}
         >
-          {isSubmitting ? "loading..." : "sign in"}
+          {isSubmitting ? "Connecting..." : "Connect Wallet"}
         </Button>
-      </Layout.Col>
-    </form>
+      ) : (
+        <>
+          <Layout.Col gap={1}>
+            <Text emphasis="primary" size={1.2}>
+              Wallet connected: {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
+            </Text>
+            
+            <Button
+              variant="contained"
+              startIcon={isSubmitting && <Spinner />}
+              endIcon={!isSubmitting && <StartIcon />}
+              onClick={handleSessionKeyLogin}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Logging in..." : "Start Game"}
+            </Button>
+            
+            <Text emphasis="secondary" size={1.2}>
+              After clicking "Start Game", you need to confirm the signature request in your wallet to verify your identity
+            </Text>
+          </Layout.Col>
+        </>
+      )}
+    </Layout.Col>
   );
 };
+
+const WalletConnectIcon = styled(Icon.Login)`
+  width: 2rem;
+  fill: ${({theme}) => theme.palette.primary.contrastText};
+`;
 
 const StartIcon = styled(Icon.Start)`
   width: 2rem;

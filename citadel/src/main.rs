@@ -4,13 +4,18 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tracing::{debug, info};
-use axum::{routing::get, routing::post, Router};
+use axum::{
+    middleware,
+    routing::{get, post},
+    Router,
+};
 use tower_http::cors::{Any, CorsLayer};
 use clap::{Parser, Subcommand};
 
 use nautilus_server::app::process_data;
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
+use nautilus_server::catastrophe::{handle_session_token, auth_middleware};
 use nautilus_server::ws::register_ws_routes;
 use nautilus_server::{init_tracing_logger, AppState};
 
@@ -77,13 +82,26 @@ async fn start_server() -> Result<()> {
         .allow_headers(Any)
         .allow_origin(Any);
         
-    // 配置HTTP路由
-    let app = Router::new()
-        .route("/get_attestation", get(get_attestation))
+    // 配置无需认证的公共路由
+    let public_routes = Router::new()
         .route("/process_data", post(process_data))
-        .route("/health", get(health_check))
         .route("/v1/fetch_key", post(handle_fetch_key))
         .route("/v1/service", get(handle_get_service))
+        .route("/get_attestation", get(get_attestation))
+        .route("/auth/session_token", post(handle_session_token)); // 获取认证令牌的路由
+    
+    // 配置需要JWT认证的受保护路由
+    let protected_routes = Router::new()
+        .route("/health", get(health_check))
+        .route_layer(middleware::from_fn_with_state(
+            state_arc.clone(),
+            auth_middleware,
+        ));
+    
+    // 合并路由
+    let app = Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
         .with_state(state_arc.clone())
         .layer(cors);
     

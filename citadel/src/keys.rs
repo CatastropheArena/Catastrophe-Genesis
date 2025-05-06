@@ -42,11 +42,11 @@ use crate::valid_ptb::ValidPtb;
 use crate::AppState;
 
 /// 会话密钥的最大生存时间（分钟）
-const SESSION_KEY_TTL_MAX: u16 = 10;
+pub const SESSION_KEY_TTL_MAX: u16 = 10;
 
 /// 允许的全节点数据过时时间
 /// 设置此持续时间时，注意Sui上的时间戳可能比当前时间稍晚，但不应超过一秒。
-const ALLOWED_STALENESS: Duration = Duration::from_secs(120);
+pub const ALLOWED_STALENESS: Duration = Duration::from_secs(120);
 
 /**
  * 会话证书，由用户签名
