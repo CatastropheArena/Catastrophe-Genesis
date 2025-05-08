@@ -16,7 +16,8 @@
 
  use crate::errors::InternalError;
  use crate::keys::KeyId;
- use crypto::create_full_id;
+ use clap::builder::Str;
+use crypto::create_full_id;
  use sui_sdk::types::transaction::{Argument, CallArg, Command, ProgrammableTransaction};
  use sui_types::base_types::ObjectID;
  use sui_types::transaction::ProgrammableMoveCall;
@@ -148,6 +149,44 @@
          };
          cmd.package
      }
+
+
+     /**
+      * 获取PTB使用的函数名
+      */
+     pub fn function(&self)-> String {
+        let Command::MoveCall(cmd) = &self.0.commands[0] else {
+            unreachable!()
+        };
+        cmd.function.clone()
+     }
+
+     /**
+      * 获取PTB使用的函数名
+      */
+      pub fn module(&self)->String {
+        let Command::MoveCall(cmd) = &self.0.commands[0] else {
+            unreachable!()
+        };
+        cmd.module.clone()
+     }
+
+
+     /**
+      * 获取完整的函数路径
+      * 
+      * 返回格式为"包ID::模块名::函数名"的完整函数路径字符串。
+      * 这对于记录和调试PTB调用非常有用。
+      * 
+      * 返回:
+      * 完整函数路径字符串
+      */
+      pub fn full_function(&self)->String {
+        let Command::MoveCall(cmd) = &self.0.commands[0] else {
+            unreachable!()
+        };
+        return format!("{}::{}::{}",cmd.package,cmd.module.clone(),cmd.function.clone())
+      }
  
      /**
       * 获取带包ID前缀的完整密钥ID

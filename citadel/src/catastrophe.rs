@@ -38,7 +38,6 @@ use crate::externals::{current_epoch_time, fetch_first_and_last_pkg_id};
 use crate::keys::{check_request, Certificate};
 use crate::metrics::call_with_duration;
 use crate::metrics::Metrics;
-use crate::signed_message::{signed_message, signed_request};
 use crate::types::{ElGamalPublicKey, ElgamalVerificationKey, MasterKeyPOP, GAS_BUDGET};
 use crate::AppState;
 use axum::{
@@ -47,6 +46,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use crate::valid_ptb::ValidPtb;
 use jsonwebtoken::{decode, DecodingKey, TokenData, Validation};
 
 /**
@@ -301,14 +301,16 @@ pub async fn handle_session_token(
     let version = headers.get("Client-Sdk-Version");
     let sdk_type = headers.get("Client-Sdk-Type");
     let target_api_version = headers.get("Client-Target-Api-Version");
-    info!(
-        "Request id: {:?}, SDK version: {:?}, SDK type: {:?}, Target API version: {:?}",
-        req_id, version, sdk_type, target_api_version
-    );
-
     app_state.metrics.observe_request("session_token");
     app_state.check_full_node_is_fresh(ALLOWED_STALENESS)?;
+    let valid_function = format!("{}::{}::{}",&app_state.config["CITADEL_PACKAGE"],"citadel","seal_approve_verify_nexus_passport");
+    
+    info!(
+        "Request id: {:?}, SDK version: {:?}, SDK type: {:?}, Target API version: {:?}, function: {:?}",
+        req_id, version, sdk_type, target_api_version, valid_function
+    );
 
+    // seal_approve_verify_nexus_passport
     check_request(
         &app_state,
         &payload.ptb,
@@ -321,11 +323,93 @@ pub async fn handle_session_token(
         req_id,
     )
     .await
-    .map(|_| {
-        Json(create_session_token_response(
-            &app_state,
-            &payload.certificate,
-        ))
+    .and_then(|_| {
+        let ptb_b64 = match Base64::decode(&payload.ptb) {
+            Ok(bytes) => bytes,
+            Err(_) => return Err(InternalError::InvalidPTB),
+        };
+        
+        let ptb: ProgrammableTransaction = match bcs::from_bytes(&ptb_b64) {
+            Ok(tx) => tx,
+            Err(_) => return Err(InternalError::InvalidPTB),
+        };
+  
+        let valid_ptb = ValidPtb::try_from(ptb.clone()).unwrap();
+        // 检查签名的ptb是否是执行的函数
+        if valid_ptb.full_function() == valid_function {
+            Ok(Json(create_session_token_response(
+                &app_state,
+                &payload.certificate,
+            )))
+        } else {
+            Err(InternalError::InvalidPTB)
+        }
     })
     .tap_err(|e| app_state.metrics.observe_error(e.as_str()))
+}
+
+/**
+ * 创建用户档案请求结构
+ * 
+ * 用于测试SDK中的create_profile_for_passport函数
+ */
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateProfileRequest {
+    pub passport_id: String,  // 护照ID (SuiAddress格式)
+    pub name: String,         // 用户名
+    pub avatar: String,       // 头像URL
+}
+
+/**
+ * 创建用户档案响应结构
+ * 
+ * 包含交易结果信息
+ */
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateProfileResponse {
+    pub success: bool,              // 是否成功
+    pub digest: Option<String>,     // 交易摘要
+    pub error: Option<String>,      // 错误信息(如果有)
+}
+
+/**
+ * 处理创建用户档案请求
+ * 
+ * 用于测试SDK中的create_profile_for_passport函数
+ * 注意：此端点仅用于测试目的，生产环境应该使用适当的认证机制
+ */
+pub async fn handle_create_profile(
+    State(app_state): State<Arc<AppState>>,
+    Json(payload): Json<CreateProfileRequest>,
+) -> Result<Json<CreateProfileResponse>, StatusCode> {
+    info!("收到创建用户档案请求: {:?}", payload);
+    app_state.metrics.observe_request("test_create_profile");
+    
+    // 调用SDK函数
+    match crate::sdk::create_profile_for_passport(
+        &app_state,
+        &payload.passport_id,
+        &payload.name,
+        &payload.avatar,
+    ).await {
+        Ok(response) => {
+            // 成功创建档案
+            let digest = response.digest.to_string();
+            info!("成功创建用户档案，交易摘要: {}", digest);
+            Ok(Json(CreateProfileResponse {
+                success: true,
+                digest: Some(digest),
+                error: None,
+            }))
+        },
+        Err(err) => {
+            // 创建失败
+            warn!("创建用户档案失败: {:?}", err);
+            Ok(Json(CreateProfileResponse {
+                success: false,
+                digest: None,
+                error: Some(err.to_string()),
+            }))
+        }
+    }
 }

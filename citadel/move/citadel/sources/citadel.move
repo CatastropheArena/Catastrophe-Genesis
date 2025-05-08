@@ -20,7 +20,9 @@ module citadel::citadel {
     use nexus::game::{Self, GameEntry};
 
     /// 错误码定义
-    const EUserAlreadyRegistered: u64 = 0;
+    const EProfileAlreadyRegistered: u64 = 0;
+    const EInvalidProfileName: u64 = 1;
+    const EInvalidProfile: u64 = 2;
     const ENoAccess: u64 = 1;
     const EInvalidUsername: u64 = 2;
     const ENotEnoughPlayers: u64 = 6;
@@ -31,6 +33,7 @@ module citadel::citadel {
     const EGameEntryInvalid: u64 = 13;
     
     /// 常量定义
+    const INIT_RATING: u64 = 1000;
     const MAX_PLAYERS_PER_LOBBY: u64 = 5;
     const MIN_PLAYERS_PER_MATCH: u64 = 2;
     const FRIEND_REQUEST_PENDING: u8 = 1;
@@ -45,25 +48,51 @@ module citadel::citadel {
     /// 游戏状态
     const MATCH_STATE_WAITING: u8 = 1;
     
+    // ============= 全局存储 =============
+    
+    /// 游戏全局管理器
+    public struct ManagerStore has key {
+        id: UID,
+        profiles: Table<address, address>, // Passport到Profile的映射
+        profile_count: u64,
+        ongoing_matches: vector<ID>,
+        match_count: u64,
+        lobby_count: u64,
+    }
+
     // ============= 用户管理相关数据结构 =============
     
     /// 用户资料
-    public struct User has key, store {
+    public struct Profile has key, store {
         id: UID,
-        username: String,
+        name: String,
         avatar: String,
         rating: u64,
-        created_at: u64,
-        last_login: u64,
-        status: u8,
-        current_match: Option<ID>,
-        current_lobby: Option<ID>,
-        total_matches: u64,
-        won_matches: u64,
-        game_coin_balance: u64,
-        last_daily_claim: u64,
+        played: u64,
+        won: u64,
+        lost:u64
     }
-    
+    /// 用户注册事件
+    public struct ProfileRegistered has copy, drop {
+        profile_id: address,
+        passport_id: address,
+        sender: address,
+        name: String,
+    }
+    /// 用户修改事件
+    public struct ProfileModified has copy, drop {
+        profile_id: address,
+        name: String,
+        avatar: String,
+    }
+    public struct ProfileStateUpdated has copy, drop {
+        profile_id: address,
+        rating: u64,
+        played: u64,
+        won: u64,
+        lost: u64,
+    }
+
     /// 用户好友关系
     public  struct FriendRelation has store {
         user_id: address,
@@ -98,7 +127,7 @@ module citadel::citadel {
         cards: vector<CardType>,
         discard: vector<CardType>,
     }
-    
+
     // ============= 游戏匹配相关数据结构 =============
     
     /// 大厅模式
@@ -165,26 +194,10 @@ module citadel::citadel {
         player_results: Table<address, u8>, // 1=胜利, 2=失败
     }
     
-    // ============= 全局存储 =============
-    
-    /// 管理器 (全局资源)
-    public struct CatastropheManager has key {
-        id: UID,
-        users: Table<String, address>, // 用户名到地址映射
-        user_count: u64,
-        ongoing_matches: vector<ID>,
-        match_count: u64,
-        lobby_count: u64,
-    }
-    
+
     // ============= 事件定义 =============
     
-    /// 用户注册事件
-    public struct UserRegistered has copy, drop {
-        user_id: address,
-        username: String,
-        timestamp: u64,
-    }
+
     
     /// 用户登录事件
     public struct UserLoggedIn has copy, drop {
@@ -308,10 +321,10 @@ module citadel::citadel {
     // ============= 初始化函数 =============
     
     fun init(ctx: &mut TxContext) {
-        let manager = CatastropheManager {
+        let manager = ManagerStore {
             id: object::new(ctx),
-            users: table::new(ctx),
-            user_count: 0,
+            profiles: table::new(ctx),
+            profile_count: 0,
             ongoing_matches: vector::empty(),
             match_count: 0,
             lobby_count: 0,
@@ -360,8 +373,220 @@ module citadel::citadel {
         // 将管理员凭证转移给部署者
         transfer::transfer(admin_cap, deployer);
     }
+    // ============= Profile管理函数 =============
+    /// 用户使用护照创建Profile
+    public entry fun create_profile_with_passport(
+        manager: &mut ManagerStore,
+        friendship: &mut FriendshipStore,
+        passport: &Passport,
+        name: String,
+        avatar: String,
+        ctx: &mut TxContext
+    ) {
+        // 获取护照ID
+        let passport_id = passport.get_passport_id();
+        
+        // 检查关联的Profile是否已存在
+        assert!(!table::contains(&manager.profiles, passport_id), EProfileAlreadyRegistered);
+        
+        // 检查用户名是否有效
+        assert!(string::length(&name) >= 3 && string::length(&name) <= 20, EInvalidProfileName);
+
+   
+        // 创建用户对象
+        let profile = Profile {
+            id: object::new(ctx),
+            name,
+            avatar,
+            rating: INIT_RATING, // 初始分数
+            played: 0,
+            won: 0,
+            lost: 0,
+        };
+        
+        let profile_id = object::uid_to_address(&profile.id);
+        
+        // 更新管理器
+        table::add(&mut manager.profiles, passport_id, profile_id);
+        manager.profile_count = manager.profile_count + 1;
+        
+        // 初始化好友关系存储
+        table::add(&mut friendship.relations, profile_id, vector::empty<FriendRelation>());
+        
+
+        // 发送注册事件
+        let sender = tx_context::sender(ctx);
+        event::emit(ProfileRegistered {
+            profile_id,
+            passport_id,
+            sender,
+            name: profile.name,
+        });
+        
+        // 将profile对象共享给全局
+        transfer::share_object(profile);
+    }
+    /// 用户修改Profile
+    public entry fun modify_profile(
+        manager: &mut ManagerStore,
+        profile: &mut Profile,
+        passport: &Passport,
+        name: String,
+        avatar: String
+    ) {
+        let passport_id = passport.get_passport_id();
+        let profile_id = table::borrow(&manager.profiles, passport_id);
+        // 判断通过passport_id获取的profile_id是否等于profile的id
+        assert!(profile_id == profile.id.to_address(), EInvalidProfile);
+        profile.name = name;
+        profile.avatar = avatar;
+        event::emit(ProfileModified {
+            profile_id: profile.id.to_address(),
+            name,
+            avatar,
+        });
+    }
+
+    /// 管理员为某个passport_id创建Profile
+    public entry fun create_profile_for_passport(
+        manager: &mut ManagerStore,
+        friendship: &mut FriendshipStore,
+        passport_id: address,
+        name: String,
+        avatar: String,
+        _: &AdminCap,
+        ctx: &mut TxContext
+    ) {
+        // 检查发送者是否为授权管理员
+        let sender = tx_context::sender(ctx);
+        // 检查用户名是否已存在
+        assert!(!table::contains(&manager.profiles, passport_id), EProfileAlreadyRegistered);
+        
+        // 检查用户名是否有效
+        assert!(string::length(&name) >= 3 && string::length(&name) <= 20, EInvalidUsername);
+        
+        // 创建用户对象
+        let profile = Profile {
+            id: object::new(ctx),
+            name,
+            avatar,
+            rating: INIT_RATING, // 初始分数
+            played: 0,
+            won: 0,
+            lost: 0,
+        };
+        
+        let profile_id = object::uid_to_address(&profile.id);
+        
+        // 更新管理器
+        table::add(&mut manager.profiles, passport_id, profile_id);
+        manager.profile_count = manager.profile_count + 1;
+        
+        // 初始化好友关系存储
+        table::add(&mut friendship.relations, profile_id, vector::empty<FriendRelation>());
+        
+        // 发送注册事件
+        event::emit(ProfileRegistered {
+            profile_id,
+            passport_id,
+            sender,
+            name,
+        });
+        
+        // 将profile对象共享给全局
+        transfer::share_object(profile);
+    }
+
+    /// 管理员修改某个Profile的基础数据
+    public entry fun modify_profile_data(
+        profile: &mut Profile,
+        name: String,
+        avatar: String,
+        _: &AdminCap,
+    ) {
+        profile.name = name;
+        profile.avatar = avatar;
+        event::emit(ProfileModified {
+            profile_id: profile.id.to_address(),
+            name,
+            avatar,
+        });
+    }
     
-    // ============= 用户管理函数 =============
+    /// 某个Profile胜利
+    public entry fun profile_win(
+        profile: &mut Profile,
+        _: &AdminCap,
+    ) {
+        profile.won = profile.won + 1;
+        profile.played = profile.played + 1;
+        event::emit(ProfileStateUpdated {
+            profile_id: profile.id.to_address(),
+            rating: profile.rating,
+            played: profile.played,
+            won: profile.won,
+            lost: profile.lost,
+        });
+    }
+
+    /// 某个Profile失败
+    public entry fun profile_lose(
+        profile: &mut Profile,
+        _: &AdminCap,
+    ) {
+        profile.lost = profile.lost + 1;
+        profile.played = profile.played + 1;
+        event::emit(ProfileStateUpdated {
+            profile_id: profile.id.to_address(),
+            rating: profile.rating,
+            played: profile.played,
+            won: profile.won,
+            lost: profile.lost,
+        });
+    }
+
+    /// 修改Profile的分数
+    public entry fun update_profile_rating(
+        profile: &mut Profile,
+        rating: u64,
+        _: &AdminCap,
+    ) {
+        profile.rating = rating;
+        event::emit(ProfileStateUpdated {
+            profile_id: profile.id.to_address(),
+            rating,
+            played: profile.played,
+            won: profile.won,
+            lost: profile.lost,
+        });
+    }
+
+
+    
+    // ============= Nexus集成函数 =============
+    
+    /// 校验用户是否具有Nexus通行证
+    public fun verify_nexus_passport(
+        passport: &Passport,
+        game_entry: &GameEntry
+    ): bool {
+        // 检查Nexus通行证是否属于同一个护照
+        let passport_id =&passport.get_passport_id() ;
+        let entry_passport_id = &game_entry.get_passport_id();
+        passport_id == entry_passport_id
+    }
+
+    /// 检查调用者是否有权限访问特定ID的入口函数
+    entry fun seal_approve_verify_nexus_passport(
+        id: vector<u8>,
+        passport: &Passport,
+        game_entry: &GameEntry,
+     ) {
+        let passport_id = bcs::to_bytes(&passport.get_passport_id());
+        assert!(id == passport_id, ENoAccess);
+        assert!(verify_nexus_passport(passport, game_entry), ENoAccess);
+    }
+
     /// 发送好友请求
     public entry fun send_friend_request(
         friendship_store: &mut FriendshipStore,
@@ -450,35 +675,13 @@ module citadel::citadel {
         });
     }
     
-    /// 领取每日奖励
-    public entry fun claim_daily_rewards(
-        user: &mut User,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        let now = clock::timestamp_ms(clock);
-        
-        // 检查上次领取时间是否超过24小时
-        assert!(now >= user.last_daily_claim + DAY_IN_MS, EInvalidAction);
-        
-        // 更新余额和领取时间
-        user.game_coin_balance = user.game_coin_balance + DAILY_REWARDS_AMOUNT;
-        user.last_daily_claim = now;
-        
-        // 发送事件
-        event::emit(DailyRewardClaimed {
-            user_id: tx_context::sender(ctx),
-            amount: DAILY_REWARDS_AMOUNT,
-            timestamp: now,
-        });
-    }
     
     // ============= 游戏大厅函数 =============
     
     /// 创建游戏大厅
     public entry fun create_lobby(
-        manager: &mut CatastropheManager,
-        user: &mut User,
+        manager: &mut ManagerStore,
+        user: &mut Profile,
         clock: &Clock,
         ctx: &mut TxContext
     ) {
@@ -502,11 +705,7 @@ module citadel::citadel {
         };
         
         let lobby_id = object::uid_to_address(&lobby.id);
-        
-        // 更新用户状态
-        user.status = USER_STATUS_IN_LOBBY;
-        user.current_lobby = option::some(object::id(&lobby));
-        
+                
         // 更新管理器
         manager.lobby_count = manager.lobby_count + 1;
         
@@ -523,7 +722,7 @@ module citadel::citadel {
     
     /// 加入游戏大厅
     public entry fun join_lobby(
-        user: &mut User,
+        user: &mut Profile,
         lobby: &mut Lobby,
         as_spectator: bool,
         clock: &Clock,
@@ -543,9 +742,6 @@ module citadel::citadel {
             vector::push_back(&mut lobby.participants, sender);
         };
         
-        // 更新用户状态
-        user.status = USER_STATUS_IN_LOBBY;
-        user.current_lobby = option::some(object::id(lobby));
         
         // 发送事件
         event::emit(PlayerJoinedLobby {
@@ -557,7 +753,7 @@ module citadel::citadel {
     
     /// 开始游戏
     public entry fun start_match(
-        manager: &mut CatastropheManager,
+        manager: &mut ManagerStore,
         lobby: &mut Lobby,
         clock: &Clock,
         ctx: &mut TxContext
@@ -687,22 +883,22 @@ module citadel::citadel {
     // ============= 辅助功能 =============
     
     /// 获取用户分数
-    public fun get_user_rating(user: &User): u64 {
+    public fun get_user_rating(user: &Profile): u64 {
         user.rating
     }
     
     /// 获取用户名
-    public fun get_username(user: &User): String {
-        user.username
+    public fun get_name(user: &Profile): String {
+        user.name
     }
     
     /// 计算胜率
-    public fun get_user_winrate(user: &User): u64 {
-        if (user.total_matches == 0) {
+    public fun get_winrate(user: &Profile): u64 {
+        if (user.played == 0) {
             return 0
         };
         
-        (user.won_matches * 100) / user.total_matches
+        (user.won * 100) / user.played
     }
 
     // ============= 管理员功能 =============
@@ -806,71 +1002,12 @@ module citadel::citadel {
         });
     }
     
-    /// 创建用户（仅管理员）
-    public entry fun create_user_for_passport(
-        manager: &mut CatastropheManager,
-        friendship_store: &mut FriendshipStore,
-        admin_registry: &AdminRegistry,
-        passport_id: address,
-        username: String,
-        avatar: String,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        // 检查发送者是否为授权管理员
-        let sender = tx_context::sender(ctx);
-        assert!(vec_set::contains(&admin_registry.admins, &sender), ENotAuthorized);
-        
-        // 检查用户名是否已存在
-        assert!(!table::contains(&manager.users, username), EUserAlreadyRegistered);
-        
-        // 检查用户名是否有效
-        assert!(string::length(&username) >= 3 && string::length(&username) <= 20, EInvalidUsername);
-        
-        let now = clock::timestamp_ms(clock);
-        
-        // 创建用户对象
-        let user = User {
-            id: object::new(ctx),
-            username,
-            avatar,
-            rating: 1000, // 初始分数
-            created_at: now,
-            last_login: now,
-            status: USER_STATUS_ONLINE,
-            current_match: option::none(),
-            current_lobby: option::none(),
-            total_matches: 0,
-            won_matches: 0,
-            game_coin_balance: 50, // 初始游戏币
-            last_daily_claim: now,
-        };
-        
-        let user_id = object::uid_to_address(&user.id);
-        
-        // 更新管理器
-        table::add(&mut manager.users, username, user_id);
-        manager.user_count = manager.user_count + 1;
-        
-        // 初始化好友关系存储
-        table::add(&mut friendship_store.relations, user_id, vector::empty<FriendRelation>());
-        
-        // 发送注册事件
-        event::emit(UserRegistered {
-            user_id,
-            username: user.username,
-            timestamp: now,
-        });
-        
-        // 将用户对象转移给护照所有者
-        transfer::transfer(user, passport_id);
-    }
 
     // ============= 游戏匹配函数 =============
     
     /// 从匹配队列创建游戏对局（仅管理员）
     public entry fun create_match_from_queue(
-        manager: &mut CatastropheManager,
+        manager: &mut ManagerStore,
         match_queue: &mut MatchQueue,
         admin_registry: &AdminRegistry,
         min_players: u64,
@@ -1118,7 +1255,7 @@ module citadel::citadel {
     /// 更新用户评分（仅管理员）
     public entry fun update_user_rating(
         admin_registry: &AdminRegistry,
-        user: &mut User,
+        user: &mut Profile,
         match_history: &MatchHistory,
         rating_change: u64,
         is_win: bool,
@@ -1131,7 +1268,7 @@ module citadel::citadel {
         // 更新评分
         if (is_win) {
             user.rating = user.rating + rating_change;
-            user.won_matches = user.won_matches + 1;
+            user.won = user.won + 1;
         } else {
             // 防止评分变为负数
             user.rating = if (user.rating > rating_change) {
@@ -1142,7 +1279,7 @@ module citadel::citadel {
         };
         
         // 更新总场次
-        user.total_matches = user.total_matches + 1;
+        user.played = user.played + 1;
     }
 
     /// 为玩家分配卡牌（仅管理员）
@@ -1272,98 +1409,8 @@ module citadel::citadel {
         }
     }
     
-    // ============= Nexus集成函数 =============
     
-    /// 校验用户是否具有Nexus通行证
-    public fun verify_nexus_passport(
-        passport: &Passport,
-        game_entry: &GameEntry
-    ): bool {
-        // 检查Nexus通行证是否属于同一个护照
-        let passport_id = passport::get_passport_id(passport);
-        let entry_passport_id = game::get_passport_id(game_entry);
-        passport_id == entry_passport_id
-    }
 
-    /// 检查调用者是否有权限访问特定ID的入口函数
-    entry fun seal_verify_nexus_passport(
-        passport: &Passport,
-        game_entry: &GameEntry,
-     ) {
-        assert!(verify_nexus_passport(passport, game_entry), ENoAccess);
-    }
-
-    /// 使用护照创建用户
-    public entry fun create_user_with_passport(
-        manager: &mut CatastropheManager,
-        friendship_store: &mut FriendshipStore,
-        passport: &Passport,
-        username: String,
-        avatar: String,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        // 检查用户名是否已存在
-        assert!(!table::contains(&manager.users, username), EUserAlreadyRegistered);
-        
-        // 检查用户名是否有效
-        assert!(string::length(&username) >= 3 && string::length(&username) <= 20, EInvalidUsername);
-        
-        let sender = tx_context::sender(ctx);
-        let now = clock::timestamp_ms(clock);
-        
-        // 获取护照ID
-        let passport_id = passport::get_passport_id(passport);
-        
-        // 创建用户对象
-        let user = User {
-            id: object::new(ctx),
-            username,
-            avatar,
-            rating: 1000, // 初始分数
-            created_at: now,
-            last_login: now,
-            status: USER_STATUS_ONLINE,
-            current_match: option::none(),
-            current_lobby: option::none(),
-            total_matches: 0,
-            won_matches: 0,
-            game_coin_balance: 50, // 初始游戏币
-            last_daily_claim: now,
-        };
-        
-        let user_id = object::uid_to_address(&user.id);
-        
-        // 更新管理器
-        table::add(&mut manager.users, username, user_id);
-        manager.user_count = manager.user_count + 1;
-        
-        // 初始化好友关系存储
-        table::add(&mut friendship_store.relations, user_id, vector::empty<FriendRelation>());
-        
-        // 发送注册事件
-        event::emit(UserRegistered {
-            user_id,
-            username: user.username,
-            timestamp: now,
-        });
-        
-        // 将用户对象转移给发送者
-        transfer::transfer(user, sender);
-    }
-    
-    /// 验证游戏通行证有效性
-    public fun verify_game_entry(
-        game_entry: &GameEntry,
-        passport: &Passport
-    ): bool {
-        // 检查游戏通行证是否属于同一个护照
-        let passport_id = passport::get_passport_id(passport);
-        let entry_passport_id = game::get_passport_id(game_entry);
-        
-        passport_id == entry_passport_id
-    }
-    
     /// 使用游戏通行证加入匹配队列
     public entry fun join_match_queue_with_entry(
         match_queue: &mut MatchQueue,
@@ -1373,7 +1420,7 @@ module citadel::citadel {
         ctx: &mut TxContext
     ) {
         // 验证游戏通行证的有效性
-        assert!(verify_game_entry(game_entry, passport), EGameEntryInvalid);
+        assert!(verify_nexus_passport( passport,game_entry), EGameEntryInvalid);
         
         // 获取护照ID
         let passport_id = passport::get_passport_id(passport);

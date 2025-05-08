@@ -1,7 +1,7 @@
 // Copyright (c), Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::externals::{duration_since, get_latest_checkpoint_timestamp, get_reference_gas_price};
+use crate::externals::{duration_since, get_latest_checkpoint_timestamp, get_reference_gas_price, fetch_first_and_last_pkg_id};
 use crate::metrics::{observation_callback, status_callback};
 use crate::metrics::{start_basic_prometheus_server, Metrics};
 use crate::types::{IbeMasterKey, Network};
@@ -30,31 +30,35 @@ use tracing::{info, Level};
 use tracing_subscriber::{fmt, EnvFilter};
 
 pub mod app;
+pub mod avatars; // 头像模块
 pub mod cache; // 缓存系统，优化性能
+pub mod catastrophe; // 游戏模块
 pub mod chat; // 聊天系统
+pub mod cli; // 命令行接口
 pub mod common;
 pub mod errors; // 错误类型定义
 pub mod externals; // 外部接口，如时间和gas价格
+pub mod game; // 游戏模块
+pub mod gaming; // 游戏匹配模块
 pub mod keys; // 密钥服务器模块
 pub mod metrics;
 pub mod passport; // 用户护照系统
 pub mod signed_message; // 签名消息处理
-pub mod types; // 数据类型定义
-pub mod valid_ptb; // 可编程交易块验证 // 测试模块
-pub mod game; // 游戏模块
-pub mod tool; // 游戏工具模块
-pub mod ws; // WebSocket 会话管理模块
-pub mod gaming; // 游戏匹配模块
-pub mod cli; // 命令行接口
-pub mod txb; // 事务构建模块
-pub mod catastrophe; // 游戏模块
 #[cfg(test)]
 pub mod tests;
+pub mod tool; // 游戏工具模块
+pub mod txb; // 事务构建模块
+pub mod types; // 数据类型定义
+pub mod valid_ptb; // 可编程交易块验证 // 测试模块
+pub mod ws; // WebSocket 会话管理模块
+pub mod sdk; // SUI SDK 模块
 
 /// 更新最新检查点时间戳的间隔
 const CHECKPOINT_UPDATE_INTERVAL: Duration = Duration::from_secs(10);
 /// 更新参考gas价格的间隔
 const GAS_PRICE_UPDATE_INTERVAL: Duration = Duration::from_secs(60);
+/// 更新Citadel包ID的间隔
+const PACKAGE_ID_UPDATE_INTERVAL: Duration = Duration::from_secs(1800); // 30分钟检查一次
 
 /// 时间戳类型（64位无符号整数）
 pub type Timestamp = u64;
@@ -81,6 +85,8 @@ pub struct AppState {
     pub latest_checkpoint_timestamp_receiver: Receiver<Timestamp>,
     // /// 参考gas价格接收器（可选，为密钥服务器功能）
     pub reference_gas_price: Receiver<u64>,
+    // /// Citadel包ID更新接收器
+    pub citadel_package_id_receiver: Receiver<String>,
 }
 
 impl AppState {
@@ -93,7 +99,15 @@ impl AppState {
         info!("Generate ephemeral keypair: {:?}", eph_kp);
         let network = Self::init_network();
         // 加载环境变量
-        let config = Self::load_env_vars(&["API_KEY", "MASTER_KEY", "KEY_SERVER_OBJECT_ID"]);
+        let config = Self::load_env_vars(&[
+            "API_KEY",
+            "MASTER_KEY",
+            "KEY_SERVER_OBJECT_ID",
+            "CITADEL_PACKAGE",
+            "CITADEL_MANAGER_ADDRESS",
+            "CITADEL_FRIENDSHIP_ADDRESS",
+            "CITADEL_ADMINCAP_ADDRESS",
+        ]);
         info!("Load env vars: {:?}", config);
         // 初始化SUI客户端
         let sui_client = SuiClientBuilder::default()
@@ -141,7 +155,7 @@ impl AppState {
             "Metrics initialized with {} groups",
             registry_service.count_registries()
         );
-
+        let citadel_package_receiver = channel(config["CITADEL_PACKAGE"].clone()).1;
         AppState {
             eph_kp,
             config,
@@ -153,6 +167,7 @@ impl AppState {
             key_server_object_id_sig,
             latest_checkpoint_timestamp_receiver: channel(0).1,
             reference_gas_price: channel(0).1,
+            citadel_package_id_receiver: citadel_package_receiver,
         }
     }
 
@@ -166,7 +181,6 @@ impl AppState {
         info!("Network: {:?}", network);
         network
     }
-
 
     /// 加载环境变量
     fn load_env_vars(keys: &[&str]) -> HashMap<String, String> {
@@ -386,6 +400,80 @@ impl AppState {
         .await;
         app_state.reference_gas_price.clone()
     }
+
+    /**
+     * 更新Citadel包ID
+     * 
+     * 定期检查并更新Citadel包ID的最新版本，确保RPC调用使用最新的包ID
+     * 通过watch channel通知其他组件配置已更新
+     * 
+     * 参数:
+     * @param app_state - 应用状态，包含SUI客户端和配置信息
+     * @param interval - 可选的更新间隔，如未指定则使用默认值
+     * 
+     * 返回:
+     * 包含最新包ID的接收器
+     */
+    pub async fn spawn_package_id_updater(
+        app_state: &mut AppState,
+        interval: Option<Duration>,
+    ) -> tokio::sync::watch::Receiver<String> {
+        // 确保配置中存在CITADEL_PACKAGE键
+        if !app_state.config.contains_key("CITADEL_PACKAGE") {
+            tracing::warn!("未找到CITADEL_PACKAGE配置，无法启动包ID更新器");
+            return tokio::sync::watch::channel(String::new()).1;
+        }
+
+        let pkg_id_str = app_state.config["CITADEL_PACKAGE"].clone();
+        
+        // 创建channel，初始值为当前配置的包ID
+        let (sender, receiver) = tokio::sync::watch::channel(pkg_id_str.clone());
+        
+        // 尝试将包ID转换为ObjectID
+        match ObjectID::from_hex_literal(&pkg_id_str) {
+            Ok(pkg_id) => {
+                let update_interval = interval.unwrap_or(PACKAGE_ID_UPDATE_INTERVAL);
+                let network = app_state.network.clone();
+                
+                // 启动更新任务
+                tokio::task::spawn(async move {
+                    let mut interval = tokio::time::interval(update_interval);
+                    
+                    loop {
+                        interval.tick().await;
+                        
+                        // 获取最新的包ID
+                        if let Ok((_, latest)) = fetch_first_and_last_pkg_id(&pkg_id, &network).await {
+                            // 检查是否需要更新
+                            if latest != pkg_id && sender.send(latest.to_string()).is_ok() {
+                                tracing::info!("Citadel包ID已更新: {} -> {}", pkg_id, latest);
+                            }
+                        }
+                    }
+                });
+                
+                tracing::info!("Citadel包ID更新器已启动，初始包ID: {}", pkg_id);
+            },
+            Err(e) => {
+                tracing::error!("无法解析CITADEL_PACKAGE的值: {}", e);
+            }
+        }
+        
+        
+        receiver
+    }
+    
+    /**
+     * 获取当前Citadel包ID
+     * 
+     * 从接收器中获取最新的Citadel包ID
+     * 
+     * 返回:
+     * 当前包ID字符串
+     */
+    pub fn citadel_package_id(&self) -> String {
+        self.citadel_package_id_receiver.borrow().clone()
+    }
 }
 
 /// Implement IntoResponse for EnclaveError.
@@ -440,7 +528,6 @@ macro_rules! create_metrics {
         builder.build().expect("Failed to build metrics with mappings")
     }};
 }
-
 
 /// 初始化日志
 pub fn init_tracing_logger() {

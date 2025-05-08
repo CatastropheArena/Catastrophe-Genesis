@@ -15,7 +15,7 @@ use clap::{Parser, Subcommand};
 use nautilus_server::app::process_data;
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
-use nautilus_server::catastrophe::{handle_session_token, auth_middleware};
+use nautilus_server::catastrophe::{handle_session_token, auth_middleware, handle_create_profile};
 use nautilus_server::ws::register_ws_routes;
 use nautilus_server::{init_tracing_logger, AppState};
 
@@ -73,6 +73,8 @@ async fn start_server() -> Result<()> {
     let mut state = AppState::new().await;
     AppState::spawn_latest_checkpoint_timestamp_updater(&mut state, None).await;
     AppState::spawn_reference_gas_price_updater(&mut state, None).await;
+    // 启动Citadel包ID更新器
+    AppState::spawn_package_id_updater(&mut state, None).await;
     
     let state_arc = Arc::new(state);
     
@@ -88,7 +90,8 @@ async fn start_server() -> Result<()> {
         .route("/v1/fetch_key", post(handle_fetch_key))
         .route("/v1/service", get(handle_get_service))
         .route("/get_attestation", get(get_attestation))
-        .route("/auth/session_token", post(handle_session_token)); // 获取认证令牌的路由
+        .route("/auth/session_token", post(handle_session_token))
+        .route("/test/create_profile", post(handle_create_profile)); // 测试SDK函数的端点
     
     // 配置需要JWT认证的受保护路由
     let protected_routes = Router::new()

@@ -34,6 +34,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_sdk::rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::SuiClientBuilder;
+use sui_types::object::Owner;
 use sui_types::transaction::Transaction;
 use tracing::info;
 use std::env;
@@ -737,7 +738,56 @@ pub async fn run_cli_command(command: Command) -> anyhow::Result<()> {
                 })
                 .unwrap();
 
-            format!("发布成功！\n包ID: {}\n升级能力ID: {}", package_id, upgrade_cap)
+            // 找到并汇总创建的所有对象
+            let mut created_objects = Vec::new();
+            let mut admin_cap_objects = Vec::new();
+            
+            for change in changes.iter() {
+                match change {
+                    ObjectChange::Created { object_id, object_type, owner, .. } => {
+                        // 检查是否是共享对象
+                        let is_shared = match owner {
+                            Owner::Shared { .. } => true,
+                            _ => false,
+                        };
+                        
+                        if is_shared {
+                            created_objects.push((object_id, object_type));
+                        }
+                        
+                        // 检查是否是AdminCap对象（直接转移给发送者的）
+                        if object_type.to_string().ends_with("::citadel::AdminCap") {
+                            match owner {
+                                Owner::AddressOwner(addr) if *addr == sender => {
+                                    admin_cap_objects.push((object_id, object_type));
+                                },
+                                _ => {}
+                            }
+                        }
+                    },
+                    _ => {}
+                }
+            }
+
+            let mut result = format!("发布成功！\n包ID: {}\n升级能力ID: {}", package_id, upgrade_cap);
+            
+            // 如果有AdminCap对象，打印它们
+            if !admin_cap_objects.is_empty() {
+                result.push_str("\n\nAdminCap对象:");
+                for (id, type_info) in admin_cap_objects {
+                    result.push_str(&format!("\n对象ID: {}\n类型: {}", id, type_info));
+                }
+            }
+            
+            // 如果有共享对象，打印它们
+            if !created_objects.is_empty() {
+                result.push_str("\n\n创建的共享对象:");
+                for (id, type_info) in created_objects {
+                    result.push_str(&format!("\n对象ID: {}\n类型: {}", id, type_info));
+                }
+            }
+
+            result
         },
         
         // 注册密钥服务器
