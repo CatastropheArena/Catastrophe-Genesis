@@ -52,6 +52,7 @@ pub const GAS_BUDGET: u64 = 500_000_000;
      Custom {
          node_url: String,
          graphql_url: String,
+         explorer_url: Option<String>, // 添加自定义浏览器URL
      },
      /// 测试集群，仅用于单元测试
      #[cfg(test)]
@@ -92,6 +93,63 @@ pub const GAS_BUDGET: u64 = 500_000_000;
              Network::TestCluster => panic!("GraphQL is not available on test cluster"),
          }
      }
+
+     /**
+      * 获取浏览器的基本URL，包含网络名称
+      * 
+      * 返回:
+      * 包含网络名称的浏览器基本URL
+      */
+     pub fn explorer_base_url(&self) -> String {
+         match self {
+             Network::Devnet => "https://suiscan.xyz/devnet".into(),
+             Network::Testnet => "https://suiscan.xyz/testnet".into(),
+             Network::Mainnet => "https://suiscan.xyz/mainnet".into(),
+             Network::Custom { explorer_url, .. } => 
+                 explorer_url.clone().unwrap_or_else(|| "https://suiscan.xyz/testnet".into()),
+             #[cfg(test)]
+             Network::TestCluster => "https://suiscan.xyz/testnet".into(),
+         }
+     }
+
+     /**
+      * 获取交易的浏览器URL
+      * 
+      * 参数:
+      * @param digest - 交易摘要
+      * 
+      * 返回:
+      * 交易在浏览器中的URL
+      */
+     pub fn explorer_tx_url(&self, digest: &str) -> String {
+         format!("{}/tx/{}", self.explorer_base_url(), digest)
+     }
+
+     /**
+      * 获取对象的浏览器URL
+      * 
+      * 参数:
+      * @param object_id - 对象ID
+      * 
+      * 返回:
+      * 对象在浏览器中的URL
+      */
+     pub fn explorer_object_url(&self, object_id: &str) -> String {
+         format!("{}/object/{}", self.explorer_base_url(), object_id)
+     }
+
+     /**
+      * 获取用户地址的浏览器URL
+      * 
+      * 参数:
+      * @param address - 用户地址
+      * 
+      * 返回:
+      * 用户地址在浏览器中的URL
+      */
+     pub fn explorer_account_url(&self, address: &str) -> String {
+         format!("{}/account/{}", self.explorer_base_url(), address)
+     }
  
      /**
       * 从字符串创建网络枚举
@@ -112,6 +170,7 @@ pub const GAS_BUDGET: u64 = 500_000_000;
              "custom" => Network::Custom {
                  node_url: std::env::var("NODE_URL").expect("NODE_URL must be set"),
                  graphql_url: std::env::var("GRAPHQL_URL").expect("GRAPHQL_URL must be set"),
+                 explorer_url: std::env::var("EXPLORER_URL").ok(),
              },
              _ => panic!("Unknown network: {}", str),
          }

@@ -286,6 +286,7 @@
          let invalid_network = Network::Custom {
              graphql_url: "http://invalid-url".to_string(),
              node_url: "http://invalid-url".to_string(),
+             explorer_url: None,
          };
  
          let result = fetch_first_and_last_pkg_id(&address, &invalid_network).await;

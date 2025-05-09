@@ -14,6 +14,8 @@ module citadel::citadel {
     use std::option::{Self, Option};
     use std::hash;
     use std::bcs;
+    use sui::display;
+    use sui::package;
     
     // 导入 nexus 模块
     use nexus::passport::{Self, Passport};
@@ -65,7 +67,6 @@ module citadel::citadel {
     /// 用户资料
     public struct Profile has key, store {
         id: UID,
-        name: String,
         avatar: String,
         rating: u64,
         played: u64,
@@ -77,12 +78,10 @@ module citadel::citadel {
         profile_id: address,
         passport_id: address,
         sender: address,
-        name: String,
     }
     /// 用户修改事件
     public struct ProfileModified has copy, drop {
         profile_id: address,
-        name: String,
         avatar: String,
     }
     public struct ProfileStateUpdated has copy, drop {
@@ -317,10 +316,26 @@ module citadel::citadel {
         revoked_by: address,
         timestamp: u64,
     }
-    
+    public struct CITADEL has drop {}
     // ============= 初始化函数 =============
     
-    fun init(ctx: &mut TxContext) {
+    fun init(witness: CITADEL,ctx: &mut TxContext) {
+        let publisher = package::claim(witness, ctx);
+        let keys = vector[
+            std::string::utf8(b"rating"),
+            std::string::utf8(b"played"),
+            std::string::utf8(b"image_url"),
+            std::string::utf8(b"project_url"),
+        ];
+        let values = vector[
+            std::string::utf8(b"{rating}"),
+            std::string::utf8(b"{played}"),
+            std::string::utf8(b"{avatar}"),
+            std::string::utf8(b"https://docs.walrus.site"),
+        ];
+        let mut display = display::new_with_fields<Profile>(&publisher, keys, values, ctx);
+        display::update_version<Profile>(&mut display);
+
         let manager = ManagerStore {
             id: object::new(ctx),
             profiles: table::new(ctx),
@@ -371,6 +386,8 @@ module citadel::citadel {
         transfer::share_object(game_entry_store);
         
         // 将管理员凭证转移给部署者
+        transfer::public_transfer(publisher, ctx.sender());
+        transfer::public_transfer(display, ctx.sender());
         transfer::transfer(admin_cap, deployer);
     }
     // ============= Profile管理函数 =============
@@ -379,7 +396,6 @@ module citadel::citadel {
         manager: &mut ManagerStore,
         friendship: &mut FriendshipStore,
         passport: &Passport,
-        name: String,
         avatar: String,
         ctx: &mut TxContext
     ) {
@@ -388,15 +404,10 @@ module citadel::citadel {
         
         // 检查关联的Profile是否已存在
         assert!(!table::contains(&manager.profiles, passport_id), EProfileAlreadyRegistered);
-        
-        // 检查用户名是否有效
-        assert!(string::length(&name) >= 3 && string::length(&name) <= 20, EInvalidProfileName);
-
    
         // 创建用户对象
         let profile = Profile {
             id: object::new(ctx),
-            name,
             avatar,
             rating: INIT_RATING, // 初始分数
             played: 0,
@@ -420,7 +431,6 @@ module citadel::citadel {
             profile_id,
             passport_id,
             sender,
-            name: profile.name,
         });
         
         // 将profile对象共享给全局
@@ -431,18 +441,15 @@ module citadel::citadel {
         manager: &mut ManagerStore,
         profile: &mut Profile,
         passport: &Passport,
-        name: String,
         avatar: String
     ) {
         let passport_id = passport.get_passport_id();
         let profile_id = table::borrow(&manager.profiles, passport_id);
         // 判断通过passport_id获取的profile_id是否等于profile的id
         assert!(profile_id == profile.id.to_address(), EInvalidProfile);
-        profile.name = name;
         profile.avatar = avatar;
         event::emit(ProfileModified {
             profile_id: profile.id.to_address(),
-            name,
             avatar,
         });
     }
@@ -452,7 +459,6 @@ module citadel::citadel {
         manager: &mut ManagerStore,
         friendship: &mut FriendshipStore,
         passport_id: address,
-        name: String,
         avatar: String,
         _: &AdminCap,
         ctx: &mut TxContext
@@ -463,12 +469,10 @@ module citadel::citadel {
         assert!(!table::contains(&manager.profiles, passport_id), EProfileAlreadyRegistered);
         
         // 检查用户名是否有效
-        assert!(string::length(&name) >= 3 && string::length(&name) <= 20, EInvalidUsername);
         
         // 创建用户对象
         let profile = Profile {
             id: object::new(ctx),
-            name,
             avatar,
             rating: INIT_RATING, // 初始分数
             played: 0,
@@ -490,7 +494,6 @@ module citadel::citadel {
             profile_id,
             passport_id,
             sender,
-            name,
         });
         
         // 将profile对象共享给全局
@@ -500,15 +503,12 @@ module citadel::citadel {
     /// 管理员修改某个Profile的基础数据
     public entry fun modify_profile_data(
         profile: &mut Profile,
-        name: String,
         avatar: String,
         _: &AdminCap,
     ) {
-        profile.name = name;
         profile.avatar = avatar;
         event::emit(ProfileModified {
             profile_id: profile.id.to_address(),
-            name,
             avatar,
         });
     }
@@ -561,8 +561,20 @@ module citadel::citadel {
         });
     }
 
-
+    /// 获取用户分数
+    public fun get_user_rating(user: &Profile): u64 {
+        user.rating
+    }
     
+    /// 计算胜率
+    public fun get_winrate(user: &Profile): u64 {
+        if (user.played == 0) {
+            return 0
+        };
+        
+        (user.won * 100) / user.played
+    }
+
     // ============= Nexus集成函数 =============
     
     /// 校验用户是否具有Nexus通行证
@@ -880,26 +892,6 @@ module citadel::citadel {
         vector::push_back(cards, card_type);
     }
     
-    // ============= 辅助功能 =============
-    
-    /// 获取用户分数
-    public fun get_user_rating(user: &Profile): u64 {
-        user.rating
-    }
-    
-    /// 获取用户名
-    public fun get_name(user: &Profile): String {
-        user.name
-    }
-    
-    /// 计算胜率
-    public fun get_winrate(user: &Profile): u64 {
-        if (user.played == 0) {
-            return 0
-        };
-        
-        (user.won * 100) / user.played
-    }
 
     // ============= 管理员功能 =============
     

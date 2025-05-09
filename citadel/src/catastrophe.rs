@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use axum::extract::Query;
+use axum::response::IntoResponse;
 /**
  * 密钥服务器实现
  *
@@ -28,7 +30,7 @@ use std::time::Duration;
 use sui_sdk::rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::types::signature::GenericSignature;
-use sui_sdk::types::transaction::{ProgrammableTransaction, TransactionKind};
+use sui_sdk::types::transaction::{Command, Argument, CallArg, ProgrammableTransaction, TransactionKind};
 use sui_sdk::verify_personal_message_signature::verify_personal_message_signature;
 use tap::TapFallible;
 use tracing::{debug, info, warn};
@@ -48,6 +50,8 @@ use axum::{
 };
 use crate::valid_ptb::ValidPtb;
 use jsonwebtoken::{decode, DecodingKey, TokenData, Validation};
+use crate::avatars::{make_avatar, make_male_avatar, make_female_avatar};
+use crate::sdk::create_profile_for_passport;
 
 /**
  * JWT令牌Claims结构
@@ -322,29 +326,58 @@ pub async fn handle_session_token(
         Some(&app_state.metrics),
         req_id,
     )
-    .await
-    .and_then(|_| {
-        let ptb_b64 = match Base64::decode(&payload.ptb) {
-            Ok(bytes) => bytes,
-            Err(_) => return Err(InternalError::InvalidPTB),
+    .await?;
+
+    let ptb_b64 = match Base64::decode(&payload.ptb) {
+        Ok(bytes) => bytes,
+        Err(_) => return Err(InternalError::InvalidPTB),
+    };
+    
+    let ptb: ProgrammableTransaction = match bcs::from_bytes(&ptb_b64) {
+        Ok(tx) => tx,
+        Err(_) => return Err(InternalError::InvalidPTB),
+    };
+
+    let valid_ptb = ValidPtb::try_from(ptb.clone()).unwrap();
+    // 检查签名的ptb是否是执行的函数
+    if valid_ptb.full_function() == valid_function {
+        // 获取 passport ID
+        let passport_id = match valid_ptb.inner_ids().first() {
+            Some(id) => match String::from_utf8(id.clone()) {
+                Ok(id_str) => id_str,
+                Err(_) => return Err(InternalError::InvalidPTB),
+            },
+            None => return Err(InternalError::InvalidPTB),
         };
+
+        // 生成头像
+        let svg = make_avatar(&passport_id);
         
-        let ptb: ProgrammableTransaction = match bcs::from_bytes(&ptb_b64) {
-            Ok(tx) => tx,
-            Err(_) => return Err(InternalError::InvalidPTB),
-        };
-  
-        let valid_ptb = ValidPtb::try_from(ptb.clone()).unwrap();
-        // 检查签名的ptb是否是执行的函数
-        if valid_ptb.full_function() == valid_function {
-            Ok(Json(create_session_token_response(
-                &app_state,
-                &payload.certificate,
-            )))
-        } else {
-            Err(InternalError::InvalidPTB)
+        // 将 SVG 转换为 base64
+        let svg_base64 = Base64::encode(svg.as_bytes());
+        let avatar_data = format!("data:image/svg+xml;base64,{}", svg_base64);
+
+        // 创建用户档案
+        match create_profile_for_passport(
+            &app_state,
+            &passport_id,
+            &avatar_data,
+        ).await {
+            Ok(_) => {
+                info!("成功为用户 {} 创建档案", passport_id);
+            },
+            Err(e) => {
+                warn!("为用户 {} 创建档案失败: {:?}", passport_id, e);
+            }
         }
-    })
+
+        Ok(Json(create_session_token_response(
+            &app_state,
+            &payload.certificate,
+        )))
+    } else {
+        Err(InternalError::InvalidPTB)
+    }
     .tap_err(|e| app_state.metrics.observe_error(e.as_str()))
 }
 
@@ -356,8 +389,6 @@ pub async fn handle_session_token(
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateProfileRequest {
     pub passport_id: String,  // 护照ID (SuiAddress格式)
-    pub name: String,         // 用户名
-    pub avatar: String,       // 头像URL
 }
 
 /**
@@ -384,18 +415,25 @@ pub async fn handle_create_profile(
 ) -> Result<Json<CreateProfileResponse>, StatusCode> {
     info!("收到创建用户档案请求: {:?}", payload);
     app_state.metrics.observe_request("test_create_profile");
+    // 生成头像
+    let svg = make_avatar(&payload.passport_id);
+
+    // 将 SVG 转换为 base64
+    let svg_base64 = Base64::encode(svg.as_bytes());
+    let avatar_data = format!("data:image/svg+xml;base64,{}", svg_base64);
     
     // 调用SDK函数
-    match crate::sdk::create_profile_for_passport(
+    match create_profile_for_passport(
         &app_state,
         &payload.passport_id,
-        &payload.name,
-        &payload.avatar,
+        &avatar_data,
     ).await {
         Ok(response) => {
             // 成功创建档案
             let digest = response.digest.to_string();
-            info!("成功创建用户档案，交易摘要: {}", digest);
+            // 使用Network方法生成浏览器URL
+            let tx_url = app_state.network.explorer_tx_url(&digest);
+            info!("成功创建用户档案，交易摘要: {}", tx_url);
             Ok(Json(CreateProfileResponse {
                 success: true,
                 digest: Some(digest),
@@ -413,3 +451,45 @@ pub async fn handle_create_profile(
         }
     }
 }
+
+/// 头像请求参数
+#[derive(Debug, Deserialize)]
+pub struct AvatarParams {
+    /// 用于生成头像的种子字符串
+    pub address: Option<String>,
+    /// 头像的性别：male 或 female
+    pub gender: Option<String>,
+}
+
+/// 处理头像生成请求
+pub async fn generate_avatar(
+    State(_state): State<Arc<AppState>>,
+    Query(params): Query<AvatarParams>,
+) -> impl IntoResponse {
+    // 使用当前时间戳作为默认种子
+    let seed = params.address.unwrap_or_else(|| {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        timestamp.to_string()
+    });
+
+    // 根据参数生成SVG
+    let svg = match params.gender.as_deref() {
+        Some("male") => make_male_avatar(&seed),
+        Some("female") => make_female_avatar(&seed),
+        _ => make_avatar(&seed),
+    };
+   
+    // 返回SVG图像
+    (
+        StatusCode::OK,
+        [
+            ("Content-Type", "image/svg+xml"),
+            ("Cache-Control", "public, max-age=86400"),
+        ],
+        svg,
+    )
+} 

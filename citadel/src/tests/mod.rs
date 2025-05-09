@@ -122,6 +122,7 @@ impl SealTestCluster {
                         key_server_object_id_sig: G1Element::generator(),
                         latest_checkpoint_timestamp_receiver: channel(0).1,
                         reference_gas_price: channel(0).1,
+                        citadel_package_id_receiver: channel(ObjectID::ZERO).1,
                     },
                     public_key,
                 }

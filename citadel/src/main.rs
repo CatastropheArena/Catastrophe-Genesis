@@ -2,20 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use std::sync::Arc;
-use tracing::{debug, info};
 use axum::{
     middleware,
     routing::{get, post},
     Router,
 };
-use tower_http::cors::{Any, CorsLayer};
 use clap::{Parser, Subcommand};
+use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
+use tracing::{debug, info};
 
 use nautilus_server::app::process_data;
+use nautilus_server::catastrophe::{
+    auth_middleware, generate_avatar, handle_create_profile, handle_session_token,
+};
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
-use nautilus_server::catastrophe::{handle_session_token, auth_middleware, handle_create_profile};
 use nautilus_server::ws::register_ws_routes;
 use nautilus_server::{init_tracing_logger, AppState};
 
@@ -38,7 +40,7 @@ enum Command {
         #[arg(long, default_value_t = DEFAULT_PORT)]
         port: u16,
     },
-    
+
     /// 运行CLI工具
     Cli {
         #[command(subcommand)]
@@ -49,7 +51,7 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     init_tracing_logger();
-    
+
     // 解析命令行参数
     let args = Arguments::parse();
     info!("解析命令行参数: {:?}", args);
@@ -58,8 +60,8 @@ async fn main() -> Result<()> {
         None | Some(Command::Server { port: _ }) => {
             info!("启动Nautilus服务器模式");
             start_server().await
-        },
-        
+        }
+
         // 如果指定了CLI子命令，运行CLI功能
         Some(Command::Cli { cli_command }) => {
             info!("启动Nautilus CLI模式");
@@ -75,15 +77,15 @@ async fn start_server() -> Result<()> {
     AppState::spawn_reference_gas_price_updater(&mut state, None).await;
     // 启动Citadel包ID更新器
     AppState::spawn_package_id_updater(&mut state, None).await;
-    
+
     let state_arc = Arc::new(state);
-    
+
     // 定义CORS策略
     let cors = CorsLayer::new()
         .allow_methods(Any)
         .allow_headers(Any)
         .allow_origin(Any);
-        
+
     // 配置无需认证的公共路由
     let public_routes = Router::new()
         .route("/process_data", post(process_data))
@@ -91,8 +93,9 @@ async fn start_server() -> Result<()> {
         .route("/v1/service", get(handle_get_service))
         .route("/get_attestation", get(get_attestation))
         .route("/auth/session_token", post(handle_session_token))
-        .route("/test/create_profile", post(handle_create_profile)); // 测试SDK函数的端点
-    
+        .route("/user/avatar", get(generate_avatar))
+        .route("/test/create_profile", post(handle_create_profile)); 
+
     // 配置需要JWT认证的受保护路由
     let protected_routes = Router::new()
         .route("/health", get(health_check))
@@ -100,19 +103,19 @@ async fn start_server() -> Result<()> {
             state_arc.clone(),
             auth_middleware,
         ));
-    
+
     // 合并路由
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .with_state(state_arc.clone())
         .layer(cors);
-    
+
     // 集成WebSocket路由
     let app = register_ws_routes(app);
-    
+
     info!("服务器启动，WebSocket功能已集成");
-    
+
     // 启动服务器
     serve(app).await
 }

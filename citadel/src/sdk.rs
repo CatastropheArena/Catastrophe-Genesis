@@ -5,11 +5,11 @@ use std::{env, str::FromStr, sync::Arc};
 use tracing::{debug, info, warn};
 
 use anyhow::Context;
-use sui_sdk::rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponse};
+use sui_sdk::{json::SuiJsonValue, rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponse}};
+use serde_json::Value;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::TransactionKind,
+    transaction::{TransactionData, TransactionKind, CallArg, ObjectArg},
     Identifier,
 };
 use anyhow::Result;
@@ -35,7 +35,6 @@ use crate::{app, txb};
 pub async fn create_profile_for_passport(
     app_state: &Arc<crate::AppState>,
     passport_id: &str,
-    name: &str,
     avatar: &str,
 ) -> Result<SuiTransactionBlockResponse> {
     let package_id_str = app_state.citadel_package_id();
@@ -43,7 +42,7 @@ pub async fn create_profile_for_passport(
 
     // 解析参数
     let package_id = ObjectID::from_hex_literal(&package_id_str).context("无效的包ID格式")?;
-    let passport_id = SuiAddress::from_str(passport_id).context("无效的护照ID格式")?;
+    let passport_id = ObjectID::from_hex_literal(&passport_id).context("无效的护照ID格式")?;
 
     // 使用AppState中的SUI客户端
     let sui_client = &app_state.sui_client;
@@ -51,51 +50,43 @@ pub async fn create_profile_for_passport(
     // 从环境变量获取密钥对并创建密钥库
     let sk = env::var("WALLET_SK").context("未设置WALLET_SK环境变量")?;
     let (keystore, _, sender) = txb::create_keystore_from_sk(&sk, Some("EnvKeyPair".to_string()))?;
-    let admin_cap_id = app_state.config["CITADEL_ADMINCAP_ADDRESS"].clone();
-    let manager_store_id = app_state.config["CITADEL_MANAGER_ADDRESS"].clone();
-    let friendship_store_id = app_state.config["CITADEL_FRIENDSHIP_ADDRESS"].clone();
+    let admin_cap_id = ObjectID::from_hex_literal(&app_state.config["CITADEL_ADMINCAP_ADDRESS"].clone()).context("无效的admin_cap_id格式")?;
+    let manager_store_id = ObjectID::from_hex_literal(&app_state.config["CITADEL_MANAGER_ADDRESS"].clone()).context("无效的manager_store_id格式")?   ;
+    let friendship_store_id = ObjectID::from_hex_literal(&app_state.config["CITADEL_FRIENDSHIP_ADDRESS"].clone()).context("无效的friendship_store_id格式")?;
+    
     // 打印日志
     info!("开始为护照ID: {} 创建用户档案", passport_id);
-    // 构建交易
-    let mut ptb = ProgrammableTransactionBuilder::new();
     
-    // 先创建所有纯值参数
-    let arg_manager_store = ptb.pure(manager_store_id).unwrap();
-    let arg_passport_id = ptb.pure(passport_id).unwrap();
-    let arg_name = ptb.pure(name).unwrap();
-    let arg_avatar = ptb.pure(avatar).unwrap();
-    let arg_admin_cap = ptb.pure(admin_cap_id).unwrap();
-    
-    // 然后在 move_call 中使用这些参数
-    ptb.programmable_move_call(
-        package_id,
-        Identifier::new("citadel").unwrap(),
-        Identifier::new("create_profile_for_passport").unwrap(),
-        vec![],
-        vec![
-            arg_manager_store,
-            arg_passport_id,
-            arg_name,
-            arg_avatar,
-            arg_admin_cap
-        ],
-    );
-    let ptb = ptb.finish();
-    let tx_data = app_state
-        .sui_client
+    // 构建参数列表
+    let args = vec![
+        SuiJsonValue::from_object_id(manager_store_id),
+        SuiJsonValue::from_object_id(friendship_store_id),
+        SuiJsonValue::from_object_id(passport_id),
+        SuiJsonValue::new(Value::String(avatar.to_string()))?,
+        SuiJsonValue::from_object_id(admin_cap_id),
+    ];
+
+    // 使用SuiClient的transaction_builder直接构建Move调用交易
+    let tx_data = sui_client
         .transaction_builder()
-        .tx_data(
+        .move_call(
             sender,
-            TransactionKind::ProgrammableTransaction(ptb),
+            package_id,
+            "citadel",
+            "create_profile_for_passport",
+            vec![],  // 类型参数为空
+            args,
+            None,  // gas object参数
             crate::types::GAS_BUDGET,
-            app_state.reference_gas_price(),
-            vec![],
-            None,
+            None,  // gas price参数
         )
-        .await.unwrap();
+        .await
+        .context("构建Move调用交易失败")?;
+    
     // 执行交易
     let response = crate::txb::execute_transaction(sui_client, tx_data, &keystore, &sender)
         .await
-        .context("Failed to execute transaction")?;
+        .context("执行交易失败")?;
+    
     Ok(response)
 }
