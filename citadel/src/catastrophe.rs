@@ -405,7 +405,6 @@ pub async fn generate_avatar(
             .as_millis();
         timestamp.to_string()
     });
-
     // 根据参数生成SVG
     let svg = match params.gender.as_deref() {
         Some("male") => make_male_avatar(&seed),

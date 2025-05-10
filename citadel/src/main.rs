@@ -76,12 +76,10 @@ async fn main() -> Result<()> {
 /// Start server functionality
 async fn start_server() -> Result<()> {
     let mut state = AppState::new().await;
+    AppState::spawn_profile_updater(&mut state, None).await;
     AppState::spawn_latest_checkpoint_timestamp_updater(&mut state, None).await;
     AppState::spawn_reference_gas_price_updater(&mut state, None).await;
-    // Start Citadel package ID updater
     AppState::spawn_package_id_updater(&mut state, None).await;
-    // Start profile updater and wait for initial update
-    AppState::spawn_profile_updater(&mut state, None).await;
 
     let state_arc = Arc::new(state);
 

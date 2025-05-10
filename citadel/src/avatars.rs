@@ -1,4 +1,98 @@
-use std::fmt::Write;
+use std::fmt;
+use tracing::info;
+
+/// 一个更现代的随机数生成器实现 - Xoshiro256StarStar
+struct Xoshiro256StarStar {
+    s: [u64; 4]
+}
+
+impl fmt::Display for Xoshiro256StarStar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Xoshiro256StarStar(s: {:?})", self.s)
+    }
+}
+
+impl Xoshiro256StarStar {
+    fn new(seed: u64) -> Self {
+        // 使用SplitMix64来初始化状态
+        let mut state = [0u64; 4];
+        let mut z = seed;
+        for s in state.iter_mut() {
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+            *s = z ^ (z >> 31);
+        }
+        Self { s: state }
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        let result = self.s[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
+        let t = self.s[1] << 17;
+        
+        self.s[2] ^= self.s[0];
+        self.s[3] ^= self.s[1];
+        self.s[1] ^= self.s[2];
+        self.s[0] ^= self.s[3];
+        
+        self.s[2] ^= t;
+        self.s[3] = self.s[3].rotate_left(45);
+        
+        result
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        self.next_u64() as u32
+    }
+
+    fn random_float(&mut self) -> f64 {
+        // 使用53位精度来生成浮点数
+        (self.next_u64() >> 11) as f64 * (1.0 / (1u64 << 53) as f64) * 2.0 - 1.0
+    }
+
+    fn binomial(&mut self, p: f64) -> bool {
+        let sample = (self.next_u64() >> 11) as f64 * (1.0 / (1u64 << 53) as f64);
+        sample > p
+    }
+
+    fn pick_one<T>(&mut self, s: &[T]) -> T 
+    where 
+        T: Clone
+    {
+        let n = s.len();
+        s[self.next_u64() as usize % n].clone()
+    }
+
+    fn pick_one_float(&mut self, s: &[f64]) -> f64 {
+        let n = s.len();
+        s[self.next_u64() as usize % n]
+    }
+
+    fn pick_a_or_b<T>(&mut self, p: f64, a: T, b: T) -> T 
+    where
+        T: Clone
+    {
+        if self.binomial(p) {
+            a
+        } else {
+            b
+        }
+    }
+}
+
+/// 从字符串生成种子值
+fn generate_seed(seed_string: &str) -> u64 {
+    let mut seed: u64 = 0;
+    for c in seed_string.bytes() {
+        seed = seed.rotate_left(8);
+        seed ^= u64::from(c);
+    }
+    seed
+}
+
+// 替换原来的linear_congruential_generator函数
+fn create_rng(seed: u64) -> Xoshiro256StarStar {
+    Xoshiro256StarStar::new(seed)
+}
 
 // MakeAvatar create svg from seed
 pub fn make_avatar(seed_string: &str) -> String {
@@ -25,66 +119,6 @@ pub fn make_male_avatar(seed_string: &str) -> String {
  *  (MIT License, Copyright (c) 2012 Plastic Jam, Copyright (c) 2019 DiceBear)
  *    cf. https://github.com/DiceBear/avatars/blob/master/packages/avatars-male-sprites/src/index.ts
  */
-
-/// 线性同余生成器
-struct Lcg {
-    seed: u64,
-}
-
-/// 从字符串生成种子值
-fn generate_seed(seed_string: &str) -> u64 {
-    let mut seed: u64 = 0;
-    for c in seed_string.bytes() {
-        seed = seed.rotate_left(8);
-        seed ^= u64::from(c);  // 使用 u64::from 替代 as u64
-    }
-    seed
-}
-
-impl Lcg {
-    fn new(seed: u64) -> Self {
-        Lcg { seed }
-    }
-
-    fn random(&mut self) -> u32 {
-        // Linear Congruent Generator, POSIX/glibc [de]rand48 setting
-        self.seed = (25214903917_u64.wrapping_mul(self.seed).wrapping_add(11)) % 281474976710656;
-        self.seed as u32
-    }
-
-    fn binomial(&mut self, p: f64) -> bool {
-        let sample = f64::from(self.random()) * (1.0 / 4294967295.0);
-        sample > p
-    }
-
-    fn pick_one<T>(&mut self, s: &[T]) -> T 
-    where 
-        T: Clone
-    {
-        let n = s.len() as u32;
-        s[(self.random() % n) as usize].clone()
-    }
-
-    fn pick_one_float(&mut self, s: &[f64]) -> f64 {
-        let n = s.len() as u32;
-        s[(self.random() % n) as usize]
-    }
-
-    fn pick_a_or_b<T>(&mut self, p: f64, a: T, b: T) -> T 
-    where
-        T: Clone
-    {
-        if self.binomial(p) {
-            a
-        } else {
-            b
-        }
-    }
-}
-
-fn linear_congruential_generator(seed: u64) -> Lcg {
-    Lcg::new(seed)
-}
 
 #[derive(Clone, Copy)]
 struct Rgb {
@@ -287,8 +321,7 @@ impl<'a> SvgColorReplacer<'a> {
 }
 
 fn male_avatar(seed: u64, mood: &str) -> String {
-    let mut g = linear_congruential_generator(seed);
-    
+    let mut g = create_rng(seed);
     // 1. 创建基础颜色
     let colors = AvatarColors {
         skin: to_rgb(g.pick_one(&[
@@ -393,7 +426,6 @@ fn male_avatar(seed: u64, mood: &str) -> String {
         "<path d='M12 7V6h1V5h1v1h1v1h-1V6h-1v1h-1zM5 7V6h1V5h1v1h1v1H7V6H6v1H5z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
         "<path d='M7 5v1H5v1H4V6h1V5h2zm6 0h2v1h1v1h-1V6h-2V5z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
         "<path d='M4 7V5h3v1H5v1H4zm12-2v2h-1V6h-2V5h3z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
-        "<path d='M7 5h1v1h1v1H8V6H7V5zm6 0v1h-1v1h-1V6h1V5h  fill='${eyebrowsColor}'/>",
         "<path d='M7 5h1v1h1v1H8V6H7V5zm6 0v1h-1v1h-1V6h1V5h1z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
         "<path d='M4 7V6h1V5h1v1H5v1H4zm10-2h1v1h1v1h-1V6h-1V5z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
     ]));
@@ -403,7 +435,7 @@ fn male_avatar(seed: u64, mood: &str) -> String {
         "<path d='M3 10v3h1v1h1v1h10v-1h1v-1h1v-3h-3v1H6v-1H3z' id='Path' fill='${mustacheColor}' fill-opacity='${mustacheColorAlpha}'/>",
         "<path d='M3 13h1v1h1v1h10v-1h1v-1h1v-3h-1v1h-1v1H5v-1H4v-1H3v3z' id='Path' fill='${mustacheColor}' fill-opacity='${mustacheColorAlpha}'/>",
         "<path d='M3 11v2h1v1h1v1h10v-1h1v-1h1v-2H3z' id='Path' fill='${mustacheColor}' fill-opacity='${mustacheColorAlpha}'/>",
-        "<path d='M3 7v6h1v1h1v1h10v-1h1v-1h1V7h-1v2h-1v1h-1v1H6v-1H5V9H4V7H3z' id='Path' fill='${mustacheColor}' fill-opacity='${mustacheColorAlpha}'/>"
+        "<path d='M3 7v6h1v1h1v1h10v-1h1v-1h1V7h-1v2h-1v1h-1v1H6v-1H5V9H4V7H3z' id='Path' fill='${mustacheColor}' fill-opacity='${mustacheColorAlpha}'/>",
     ];
     let selected_mustache = g.pick_one(&mustache_options);
     s.push_str(&g.pick_a_or_b(0.5, selected_mustache, ""));
@@ -433,7 +465,7 @@ fn male_avatar(seed: u64, mood: &str) -> String {
         "<path d='M3 20v-3h1v-1h4v1h1v1h2v-1h1v-1h4v1h1v3H3z' fill='${clothesColor}'/><path d='M4 17v-1h3v1H4zm9 0v-1h3v1h-3z' fill-rule='evenodd' fill='#FFF' fill-opacity='.2'/>",
         "<path d='M3 20v-3h1v-1h3v-1h1v1h1v1h2v-1h1v-1h1v1h3v1h1v3H3z' fill='${clothesColor}'/><path d='M6 16H4v1H3v3h6v-2H8v-1H6v-1zm2 0h1-1zm3 0h1-1zm2 0h1v1h-2v1h-1v2h6v-3h-1v-1h-3z' fill-rule='evenodd' fill='#FFF' fill-opacity='.2'/>",
         "<path d='M5 16H4v1H3v3h14v-3h-1v-1h-3v1H7v-1H5z' fill='${clothesColor}'/><path d='M10 20v-1h3v1h-3z' fill='#FFF' fill-opacity='.5'/><path d='M5 16H4v1H3v3h1v-1h1v-3zm1 0h1v1h6v-1h1v2H6v-2zm9 0h1v1h1v3h-1v-1h-1v-3z' fill-rule='evenodd' fill='#FFF' fill-opacity='.8'/>",
-        "<path d='M3 20v-3h1v-1h4v1h4v-1h4v1h1v3H3z' fill='${clothesColor}'/><path d='M3 20v-1h1v1H3zm2 0v-1h1v1H5zm2 0v-1h1v1H7zm2 0v-1h1v1H9zm2 0v-1h1v1h-1zm2 0v-1h1v1h-1zm2 0v-1h1v1h-1zm1-2h1v1h-1v-1zm-2 0h1v1h-1v-1zm-2 0h1v1h-1v-1zm-2 0h1v1H8v-1zm-2 0h1v1H6v-1zm-2 0h1v1H4v-1zm-1-1h1v1H3v-1zm2 0h1v1H5v-1zm2 0h1v1H7v-1zm2 0h1v1H9v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zM4 16h1v1H4v-1zm2 0h1v1H6v-1zm6 0h1v1h-1v-1zm2 0h1v1h-1v-1z' fill-rule='evenodd' fill='#FFF' fill-opacity='.2'/>",
+        "<path d='M3 20v-3h1v-1h4v1h4v-1h4v1h1v3H3z' fill='${clothesColor}'/><path d='M3 20v-1h1v1H3zm2 0v-1h1v1H5zm2 0v-1h1v1H7zm2 0v-1h1v1H9zm2 0v-1h1v1h-1zm2 0v-1h1v1h-1zm2 0v-1h1v1h-1zm1-2h1v1h-1v-1zm-2 0h1v1h-1v-1zm-2 0h1v1h-1v-1zm-2 0h1v1h-1v-1zm-2 0h1v1H8v-1zm-2 0h1v1H6v-1zm-2 0h1v1H4v-1zm-1-1h1v1H3v-1zm2 0h1v1H5v-1zm2 0h1v1H7v-1zm2 0h1v1H9v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zm2 0h1v1h-1v-1zM4 16h1v1H4v-1zm2 0h1v1H6v-1zm6 0h1v1h-1v-1zm2 0h1v1h-1v-1z' fill-rule='evenodd' fill='#FFF' fill-opacity='.2'/>",
         "<path d='M3 20v-3h1v-1h4v1h4v-1h4v1h1v3H3z' fill='${clothesColor}'/><path d='M3 20v-2h1v2H3zm3 0v-2h2v2H6zm4 0v-2h2v2h-2zm4 0v-2h2v2h-2zm2-3v1h1v-1h-1zm-2 1v-2h-2v2h2zm-6-1v1h2v-1H8zm-4-1v2h2v-2H4z' fill-rule='evenodd' fill='#FFF' fill-opacity='.2'/>",
         "<path d='M3 20v-3h1v-1h4v1h4v-1h4v1h1v3H3z' fill='${clothesColor}'/><path d='M3 19h14v1H3v-1zm0-2h14v1H3v-1z' fill-rule='evenodd' fill='#FFF' fill-opacity='.2'/>",
         "<path d='M3 20v-3h1v-1h4v1h4v-1h4v1h1v3H3z' fill='${clothesColor}'/>",
@@ -486,8 +518,7 @@ fn male_avatar(seed: u64, mood: &str) -> String {
 }
 
 fn female_avatar(seed: u64, mood: &str) -> String {
-    let mut g = linear_congruential_generator(seed);
-
+    let mut g = create_rng(seed);
     // 1. 创建基础颜色
     let colors = AvatarColors {
         skin: to_rgb(g.pick_one(&[
@@ -591,7 +622,6 @@ fn female_avatar(seed: u64, mood: &str) -> String {
         "<path d='M12 7V6h1V5h1v1h1v1h-1V6h-1v1h-1zM5 7V6h1V5h1v1h1v1H7V6H6v1H5z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
         "<path d='M7 5v1H5v1H4V6h1V5h2zm6 0h2v1h1v1h-1V6h-2V5z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
         "<path d='M4 7V5h3v1H5v1H4zm12-2v2h-1V6h-2V5h3z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
-        "<path d='M7 5h1v1h1v1H8V6H7V5zm6 0v1h-1v1h-1V6h1V5h  fill='${eyebrowsColor}'/>",
         "<path d='M7 5h1v1h1v1H8V6H7V5zm6 0v1h-1v1h-1V6h1V5h1z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
         "<path d='M4 7V6h1V5h1v1H5v1H4zm10-2h1v1h1v1h-1V6h-1V5z' fill-rule='evenodd' fill='${eyebrowsColor}'/>",
     ]));
@@ -680,4 +710,21 @@ fn female_avatar(seed: u64, mood: &str) -> String {
     s = replacer.replace_colors(&s);
     
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_different_seeds_generate_different_avatars() {
+        let seed1 = 6198930009392767610;
+        let seed2 = 6054814821316911738;
+
+        let avatar1 = male_avatar(seed1, "");
+        let avatar2 = male_avatar(seed2, "");
+        
+        
+        assert_ne!(avatar1, avatar2, "不同的种子应该生成不同的头像");
+    }
 }
