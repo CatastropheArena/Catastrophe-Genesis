@@ -101,17 +101,18 @@ impl SealTestCluster {
     pub async fn new(servers: usize, users: usize) -> Self {
         // 创建Sui测试集群
         let cluster = TestClusterBuilder::new().build().await;
-
         let mut rng = thread_rng();
 
         // 创建密钥服务器
-        // 注意：我们可以发布Seal模块并在链上注册密钥服务器，但目前测试不需要这样做，为了加速测试
         let mut server_vec = Vec::new();
         for i in 0..servers {
             // 为每个服务器创建一个带有唯一前缀的注册表
             let server_registry_service =
                 start_basic_prometheus_server(Some(METRICS_HOST_PORT + i as u16));
             let (master_key, public_key) = ibe::generate_key_pair(&mut rng);
+
+            // 从集群配置中获取实际的 RPC URL
+            let rpc_url = cluster.rpc_url().to_string();
             
             // 创建 GameManager
             let game_manager = GameManager::new(

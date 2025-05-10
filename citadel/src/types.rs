@@ -73,7 +73,7 @@ pub const GAS_BUDGET: u64 = 500_000_000;
              Network::Mainnet => "https://fullnode.mainnet.sui.io:443".into(),
              Network::Custom { node_url, .. } => node_url.clone(),
              #[cfg(test)]
-             Network::TestCluster => panic!(), // 目前未使用，如需要可从cluster.rpc_url()获取
+             Network::TestCluster => panic!("GraphQL and Explorer services are not available in test cluster"),
          }
      }
  
@@ -90,7 +90,7 @@ pub const GAS_BUDGET: u64 = 500_000_000;
              Network::Mainnet => "https://sui-mainnet.mystenlabs.com/graphql".into(),
              Network::Custom { graphql_url, .. } => graphql_url.clone(),
              #[cfg(test)]
-             Network::TestCluster => panic!("GraphQL is not available on test cluster"),
+             Network::TestCluster => panic!("GraphQL and Explorer services are not available in test cluster"),
          }
      }
 
@@ -108,7 +108,7 @@ pub const GAS_BUDGET: u64 = 500_000_000;
              Network::Custom { explorer_url, .. } => 
                  explorer_url.clone().unwrap_or_else(|| "https://suiscan.xyz/testnet".into()),
              #[cfg(test)]
-             Network::TestCluster => "https://suiscan.xyz/testnet".into(),
+             Network::TestCluster => panic!("Explorer URL is not available in test cluster"),
          }
      }
 
