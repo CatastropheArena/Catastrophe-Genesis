@@ -52,6 +52,7 @@ use crate::valid_ptb::ValidPtb;
 use jsonwebtoken::{decode, DecodingKey, TokenData, Validation};
 use crate::avatars::{make_avatar, make_male_avatar, make_female_avatar};
 use crate::sdk::create_profile_for_passport;
+use crate::sdk::Profile;  // 从sdk模块直接导入Profile类型
 
 /**
  * JWT令牌Claims结构
@@ -381,6 +382,49 @@ pub async fn handle_session_token(
     .tap_err(|e| app_state.metrics.observe_error(e.as_str()))
 }
 
+/// 头像请求参数
+#[derive(Debug, Deserialize)]
+pub struct AvatarParams {
+    /// 用于生成头像的种子字符串
+    pub address: Option<String>,
+    /// 头像的性别：male 或 female
+    pub gender: Option<String>,
+}
+
+/// 处理头像生成请求
+pub async fn generate_avatar(
+    State(_state): State<Arc<AppState>>,
+    Query(params): Query<AvatarParams>,
+) -> impl IntoResponse {
+    // 使用当前时间戳作为默认种子
+    let seed = params.address.unwrap_or_else(|| {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        timestamp.to_string()
+    });
+
+    // 根据参数生成SVG
+    let svg = match params.gender.as_deref() {
+        Some("male") => make_male_avatar(&seed),
+        Some("female") => make_female_avatar(&seed),
+        _ => make_avatar(&seed),
+    };
+   
+    // 返回SVG图像
+    (
+        StatusCode::OK,
+        [
+            ("Content-Type", "image/svg+xml"),
+            ("Cache-Control", "public, max-age=86400"),
+        ],
+        svg,
+    )
+}
+
+
 /**
  * 创建用户档案请求结构
  * 
@@ -452,44 +496,74 @@ pub async fn handle_create_profile(
     }
 }
 
-/// 头像请求参数
-#[derive(Debug, Deserialize)]
-pub struct AvatarParams {
-    /// 用于生成头像的种子字符串
-    pub address: Option<String>,
-    /// 头像的性别：male 或 female
-    pub gender: Option<String>,
+
+/// 获取用户档案请求结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetProfileRequest {
+    pub passport_id: String,  // 护照ID (SuiAddress格式)
 }
 
-/// 处理头像生成请求
-pub async fn generate_avatar(
-    State(_state): State<Arc<AppState>>,
-    Query(params): Query<AvatarParams>,
-) -> impl IntoResponse {
-    // 使用当前时间戳作为默认种子
-    let seed = params.address.unwrap_or_else(|| {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        timestamp.to_string()
-    });
+/// 获取用户档案响应结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetProfileResponse {
+    pub success: bool,
+    pub profile: Option<Profile>,  // 用户档案信息
+    pub error: Option<String>,    // 错误信息(如果有)
+}
 
-    // 根据参数生成SVG
-    let svg = match params.gender.as_deref() {
-        Some("male") => make_male_avatar(&seed),
-        Some("female") => make_female_avatar(&seed),
-        _ => make_avatar(&seed),
+/// 处理获取用户档案请求
+/// 
+/// 用于测试从GameManager获取用户档案信息
+/// 注意：此端点仅用于测试目的
+pub async fn handle_get_profile(
+    State(app_state): State<Arc<AppState>>,
+    Json(payload): Json<GetProfileRequest>,
+) -> Result<Json<GetProfileResponse>, StatusCode> {
+    info!("收到获取用户档案请求: {:?}", payload);
+    app_state.metrics.observe_request("test_get_profile");
+
+    // 将护照ID转换为ObjectID
+    let passport_id = match ObjectID::from_hex_literal(&payload.passport_id) {
+        Ok(id) => id,
+        Err(err) => {
+            return Ok(Json(GetProfileResponse {
+                success: false,
+                profile: None,
+                error: Some(format!("无效的护照ID: {}", err)),
+            }));
+        }
     };
-   
-    // 返回SVG图像
-    (
-        StatusCode::OK,
-        [
-            ("Content-Type", "image/svg+xml"),
-            ("Cache-Control", "public, max-age=86400"),
-        ],
-        svg,
-    )
+    info!("passport_id: {:?}", passport_id);
+
+    // 使用GameManager获取用户档案
+    match app_state.game_manager.get_profile_id_by_passport(&passport_id).await {
+        Ok(profile_id) => {
+            match app_state.game_manager.get_profile(&profile_id).await {
+                Ok(profile) => {
+                    info!("成功获取用户档案: {:?}", profile);
+                    Ok(Json(GetProfileResponse {
+                        success: true,
+                        profile: Some(profile),
+                        error: None,
+                    }))
+                },
+                Err(err) => {
+                    warn!("获取用户档案失败: {:?}", err);
+                    Ok(Json(GetProfileResponse {
+                        success: false,
+                        profile: None,
+                        error: Some(format!("获取档案信息失败: {}", err)),
+                    }))
+                }
+            }
+        },
+        Err(err) => {
+            warn!("获取用户档案ID失败: {:?}", err);
+            Ok(Json(GetProfileResponse {
+                success: false,
+                profile: None,
+                error: Some(format!("获取档案ID失败: {}", err)),
+            }))
+        }
+    }
 } 

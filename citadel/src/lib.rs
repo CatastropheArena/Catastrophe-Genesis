@@ -20,6 +20,7 @@ use rand::SeedableRng;
 use serde_json::json;
 use std::collections::HashMap;
 use std::env;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClient;
@@ -28,6 +29,9 @@ use tokio::sync::watch::channel;
 use tokio::sync::watch::Receiver;
 use tracing::{info, Level};
 use tracing_subscriber::{fmt, EnvFilter};
+use crate::sdk::GameManager;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod app;
 pub mod avatars; // 头像模块
@@ -59,7 +63,8 @@ const CHECKPOINT_UPDATE_INTERVAL: Duration = Duration::from_secs(10);
 const GAS_PRICE_UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 /// 更新Citadel包ID的间隔
 const PACKAGE_ID_UPDATE_INTERVAL: Duration = Duration::from_secs(1800); // 30分钟检查一次
-
+/// 更新Profile的间隔
+const PROFILE_UPDATE_INTERVAL: Duration = Duration::from_secs(30); // 30秒检查一次
 /// 时间戳类型（64位无符号整数）
 pub type Timestamp = u64;
 
@@ -79,14 +84,16 @@ pub struct AppState {
     pub master_key: types::IbeMasterKey,
     /// 密钥服务器对象ID（可选，为密钥服务器功能）
     pub key_server_object_id: ObjectID,
-    // /// 主密钥持有证明（可选，为密钥服务器功能）
+    /// 主密钥持有证明（可选，为密钥服务器功能）
     pub key_server_object_id_sig: types::MasterKeyPOP,
-    // /// 最新检查点时间戳接收器（可选，为密钥服务器功能）
+    /// 最新检查点时间戳接收器（可选，为密钥服务器功能）
     pub latest_checkpoint_timestamp_receiver: Receiver<Timestamp>,
-    // /// 参考gas价格接收器（可选，为密钥服务器功能）
+    /// 参考gas价格接收器（可选，为密钥服务器功能）
     pub reference_gas_price: Receiver<u64>,
-    // /// Citadel包ID更新接收器
+    /// Citadel包ID更新接收器
     pub citadel_package_id_receiver: Receiver<String>,
+    /// 游戏数据管理器
+    pub game_manager: Arc<GameManager>,
 }
 
 impl AppState {
@@ -134,6 +141,15 @@ impl AppState {
             "Key server object id: {:?} , signature: {:?}",
             key_server_object_id, key_server_object_id_sig
         );
+        // 初始化ProfileManager
+        let manager_store_id = ObjectID::from_hex_literal(&config["CITADEL_MANAGER_ADDRESS"])
+            .expect("Invalid CITADEL_MANAGER_ADDRESS");
+        // 初始化GameManager
+        let game_manager = Arc::new(GameManager::new(
+            sui_client.clone(),
+            network.clone(),
+            manager_store_id,
+        ).await.unwrap());
         // 启动指标服务器,创建分组的metrics
         let registry_service = start_basic_prometheus_server(None);
         let metrics = create_metrics! {
@@ -168,6 +184,7 @@ impl AppState {
             latest_checkpoint_timestamp_receiver: channel(0).1,
             reference_gas_price: channel(0).1,
             citadel_package_id_receiver: citadel_package_receiver,
+            game_manager,
         }
     }
 
@@ -420,7 +437,7 @@ impl AppState {
     ) -> tokio::sync::watch::Receiver<String> {
         // 确保配置中存在CITADEL_PACKAGE键
         if !app_state.config.contains_key("CITADEL_PACKAGE") {
-            tracing::warn!("未找到CITADEL_PACKAGE配置，无法启动包ID更新器");
+            tracing::warn!("CITADEL_PACKAGE configuration not found, cannot start package ID updater");
             return tokio::sync::watch::channel(String::new()).1;
         }
 
@@ -446,19 +463,84 @@ impl AppState {
                         if let Ok((_, latest)) = fetch_first_and_last_pkg_id(&pkg_id, &network).await {
                             // 检查是否需要更新
                             if latest != pkg_id && sender.send(latest.to_string()).is_ok() {
-                                tracing::info!("Citadel包ID已更新: {} -> {}", pkg_id, latest);
+                                tracing::info!("Citadel package ID updated: {} -> {}", pkg_id, latest);
                             }
                         }
                     }
                 });
                 
-                tracing::info!("Citadel包ID更新器已启动，初始包ID: {}", pkg_id);
+                tracing::info!("Citadel package ID updater started, initial package ID: {}", pkg_id);
             },
             Err(e) => {
-                tracing::error!("无法解析CITADEL_PACKAGE的值: {}", e);
+                tracing::error!("Failed to parse CITADEL_PACKAGE value: {}", e);
             }
         }
         
+        receiver
+    }
+
+    /**
+     * 启动档案更新器
+     * 
+     * 定期更新所有用户档案信息，确保数据的实时性
+     * 
+     * 参数:
+     * @param app_state - 应用状态，包含游戏管理器
+     * @param interval - 可选的更新间隔，如未指定则使用默认值
+     * 
+     * 返回:
+     * 包含当前profiles数量的接收器
+     */
+    pub async fn spawn_profile_updater(
+        app_state: &mut AppState,
+        interval: Option<Duration>,
+    ) -> tokio::sync::watch::Receiver<u64> {
+        // 获取初始profiles数量
+        let initial_count = app_state.game_manager.get_profile_size().await.unwrap_or(0);
+        
+        // 创建channel，初始值为当前profiles数量
+        let (sender, receiver) = tokio::sync::watch::channel(initial_count);
+        
+        let update_interval = interval.unwrap_or(PROFILE_UPDATE_INTERVAL);
+        let game_manager = app_state.game_manager.clone();
+
+        // 启动更新任务
+        tokio::task::spawn(async move {
+            loop {
+                // 计算距离上次更新的时间
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let last = game_manager.get_last_update();
+                let elapsed = now - last;
+
+                // 如果距离上次更新时间小于间隔，则等待剩余时间
+                if elapsed < update_interval.as_secs() {
+                    let wait_time = update_interval.as_secs() - elapsed;
+                    tokio::time::sleep(Duration::from_secs(wait_time)).await;
+                }
+
+                // 更新所有profiles
+                if let Err(e) = game_manager.update_all_profiles().await {
+                    tracing::warn!("Failed to update user profiles: {}", e);
+                }
+                
+                // 获取最新的profiles数量
+                if let Ok(count) = game_manager.get_profile_size().await {
+                    if sender.send(count).is_ok() {
+                        tracing::debug!("Profiles count updated: {}", count);
+                    }
+                }
+            }
+        });
+        
+        tracing::info!(
+            "Profile updater started, initial profiles count: {}, update interval: {} seconds, last update time: {}", 
+            initial_count, 
+            update_interval.as_secs(),
+            app_state.game_manager.get_last_update()
+        );
         
         receiver
     }

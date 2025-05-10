@@ -14,7 +14,10 @@ use tracing::{debug, info};
 
 use nautilus_server::app::process_data;
 use nautilus_server::catastrophe::{
-    auth_middleware, generate_avatar, handle_create_profile, handle_session_token,
+    auth_middleware, generate_avatar, 
+    handle_session_token,
+    handle_create_profile,
+    handle_get_profile,
 };
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
@@ -23,7 +26,7 @@ use nautilus_server::{init_tracing_logger, AppState};
 
 const DEFAULT_PORT: u16 = 3000;
 
-/// Nautilus工具 - 服务器和CLI功能
+/// Nautilus tool - Server and CLI functionality
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Arguments {
@@ -31,17 +34,17 @@ struct Arguments {
     command: Option<Command>,
 }
 
-/// 可用子命令
+/// Available subcommands
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// 启动Nautilus服务器（默认行为）
+    /// Start Nautilus server (default behavior)
     Server {
-        /// 服务器监听端口
+        /// Server listening port
         #[arg(long, default_value_t = DEFAULT_PORT)]
         port: u16,
     },
 
-    /// 运行CLI工具
+    /// Run CLI tool
     Cli {
         #[command(subcommand)]
         cli_command: nautilus_server::cli::Command,
@@ -52,41 +55,43 @@ enum Command {
 async fn main() -> Result<()> {
     init_tracing_logger();
 
-    // 解析命令行参数
+    // Parse command line arguments
     let args = Arguments::parse();
-    info!("解析命令行参数: {:?}", args);
+    info!("Parsed command line arguments: {:?}", args);
     match args.command {
-        // 如果没有指定子命令或者指定了Server子命令，启动服务器
+        // If no command is specified or the Server command is specified, start the server
         None | Some(Command::Server { port: _ }) => {
-            info!("启动Nautilus服务器模式");
+            info!("Starting Nautilus server mode");
             start_server().await
         }
 
-        // 如果指定了CLI子命令，运行CLI功能
+        // If a CLI command is specified, run CLI functionality
         Some(Command::Cli { cli_command }) => {
-            info!("启动Nautilus CLI模式");
+            info!("Starting Nautilus CLI mode");
             nautilus_server::cli::run_cli_command(cli_command).await
         }
     }
 }
 
-/// 启动服务器功能
+/// Start server functionality
 async fn start_server() -> Result<()> {
     let mut state = AppState::new().await;
     AppState::spawn_latest_checkpoint_timestamp_updater(&mut state, None).await;
     AppState::spawn_reference_gas_price_updater(&mut state, None).await;
-    // 启动Citadel包ID更新器
+    // Start Citadel package ID updater
     AppState::spawn_package_id_updater(&mut state, None).await;
+    // Start profile updater and wait for initial update
+    AppState::spawn_profile_updater(&mut state, None).await;
 
     let state_arc = Arc::new(state);
 
-    // 定义CORS策略
+    // Define CORS strategy
     let cors = CorsLayer::new()
         .allow_methods(Any)
         .allow_headers(Any)
         .allow_origin(Any);
 
-    // 配置无需认证的公共路由
+    // Configure public routes without authentication
     let public_routes = Router::new()
         .route("/process_data", post(process_data))
         .route("/v1/fetch_key", post(handle_fetch_key))
@@ -94,9 +99,10 @@ async fn start_server() -> Result<()> {
         .route("/get_attestation", get(get_attestation))
         .route("/auth/session_token", post(handle_session_token))
         .route("/user/avatar", get(generate_avatar))
-        .route("/test/create_profile", post(handle_create_profile)); 
+        .route("/test/create_profile", post(handle_create_profile))
+        .route("/test/get_profile", post(handle_get_profile)); 
 
-    // 配置需要JWT认证的受保护路由
+    // Configure protected routes that require JWT authentication
     let protected_routes = Router::new()
         .route("/health", get(health_check))
         .route_layer(middleware::from_fn_with_state(
@@ -104,26 +110,26 @@ async fn start_server() -> Result<()> {
             auth_middleware,
         ));
 
-    // 合并路由
+    // Merge routes
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .with_state(state_arc.clone())
         .layer(cors);
 
-    // 集成WebSocket路由
+    // Integrate WebSocket routes
     let app = register_ws_routes(app);
 
-    info!("服务器启动，WebSocket功能已集成");
+    info!("Server started, WebSocket functionality integrated");
 
-    // 启动服务器
+    // Start server
     serve(app).await
 }
 
-/// 启动服务器
+/// Start server
 pub async fn serve(app: Router) -> Result<()> {
     debug!("listening on http://localhost:{}", DEFAULT_PORT);
-    // 启动服务器
+    // Start server
     let listener = tokio::net::TcpListener::bind(&format!("0.0.0.0:{}", DEFAULT_PORT))
         .await
         .unwrap();

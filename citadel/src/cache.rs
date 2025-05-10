@@ -56,9 +56,9 @@
   * 缓存操作实现
   * 
   * 提供缓存的基本操作，包括创建、获取和插入
-  * 约束键(K)为可哈希和相等比较，值(V)为可复制
+  * 约束键(K)为可哈希和相等比较，值(V)为可克隆
   */
- impl<K: Hash + Eq, V: Copy> Cache<K, V> {
+ impl<K: Hash + Eq, V: Clone> Cache<K, V> {
      /**
       * 创建新的缓存实例
       * 
@@ -102,7 +102,7 @@
                      cache.pop(key);
                      None
                  } else {
-                     Some(entry.value)
+                     Some(entry.value.clone())
                  }
              }
              None => None,

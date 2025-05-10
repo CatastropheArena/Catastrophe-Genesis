@@ -17,6 +17,7 @@
  */
 use crate::externals::{add_latest, add_package};
 use crate::metrics::{start_basic_prometheus_server, METRICS_HOST_PORT};
+use crate::sdk::GameManager;
 use crate::types::Network;
 use crate::{create_metrics, AppState};
 use crypto::ibe;
@@ -28,6 +29,7 @@ use rand::thread_rng;
 use serde_json::json;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use sui_move_build::BuildConfig;
 use sui_sdk::json::SuiJsonValue;
 use sui_sdk::rpc_types::{ObjectChange, SuiData, SuiObjectDataOptions};
@@ -104,30 +106,39 @@ impl SealTestCluster {
 
         // 创建密钥服务器
         // 注意：我们可以发布Seal模块并在链上注册密钥服务器，但目前测试不需要这样做，为了加速测试
-        let servers = (0..servers)
-            .map(|i| {
-                // 为每个服务器创建一个带有唯一前缀的注册表
-                let server_registry_service =
-                    start_basic_prometheus_server(Some(METRICS_HOST_PORT + i as u16));
-                let (master_key, public_key) = ibe::generate_key_pair(&mut rng);
-                SealKeyServer {
-                    server: AppState {
-                        eph_kp: AppState::generate_keypair(Some(42)),
-                        config: std::collections::HashMap::new(),
-                        metrics: create_metrics!(&server_registry_service),
-                        sui_client: cluster.sui_client().clone(),
-                        network: Network::TestCluster,
-                        master_key,
-                        key_server_object_id: ObjectID::ZERO,
-                        key_server_object_id_sig: G1Element::generator(),
-                        latest_checkpoint_timestamp_receiver: channel(0).1,
-                        reference_gas_price: channel(0).1,
-                        citadel_package_id_receiver: channel(ObjectID::ZERO).1,
-                    },
-                    public_key,
-                }
-            })
-            .collect();
+        let mut server_vec = Vec::new();
+        for i in 0..servers {
+            // 为每个服务器创建一个带有唯一前缀的注册表
+            let server_registry_service =
+                start_basic_prometheus_server(Some(METRICS_HOST_PORT + i as u16));
+            let (master_key, public_key) = ibe::generate_key_pair(&mut rng);
+            
+            // 创建 GameManager
+            let game_manager = GameManager::new(
+                cluster.sui_client().clone(),
+                Network::TestCluster,
+                ObjectID::ZERO,
+            ).await.unwrap();
+            
+            let server = SealKeyServer {
+                server: AppState {
+                    eph_kp: AppState::generate_keypair(Some(42)),
+                    config: std::collections::HashMap::new(),
+                    metrics: create_metrics!(&server_registry_service),
+                    sui_client: cluster.sui_client().clone(),
+                    network: Network::TestCluster,
+                    master_key,
+                    key_server_object_id: ObjectID::ZERO,
+                    key_server_object_id_sig: G1Element::generator(),
+                    latest_checkpoint_timestamp_receiver: channel(0).1,
+                    reference_gas_price: channel(0).1,
+                    citadel_package_id_receiver: channel(String::new()).1,
+                    game_manager: Arc::new(game_manager),
+                },
+                public_key,
+            };
+            server_vec.push(server);
+        }
 
         // 创建测试用户
         let users = (0..users)
@@ -137,7 +148,7 @@ impl SealTestCluster {
 
         Self {
             cluster,
-            servers,
+            servers: server_vec,
             users,
         }
     }

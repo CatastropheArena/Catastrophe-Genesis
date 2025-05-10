@@ -277,7 +277,7 @@ impl ConnectionManager {
         let client_id = client_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let connection_id = self.connection_counter.fetch_add(1, Ordering::SeqCst);
         
-        info!("新WebSocket连接: id={}, connection_id={}", client_id, connection_id);
+        info!("New WebSocket connection: id={}, connection_id={}", client_id, connection_id);
         
         // 更新统计
         {
@@ -663,7 +663,7 @@ impl ConnectionManager {
         F: Fn() + Send + Sync + 'static,
     {
         let handler_id = format!("{}:{}", client_id, context);
-        info!("设置断开连接处理器: {}", handler_id);
+        info!("Setting up disconnect handler: {}", handler_id);
         
         // 清理同一上下文的旧处理器
         self.clean_old_handlers(client_id, context).await;
@@ -672,7 +672,7 @@ impl ConnectionManager {
         let mut handlers = self.disconnect_handlers.lock().await;
         handlers.insert(handler_id, Box::new(handler));
         
-        info!("当前处理器总数: {}", handlers.len());
+        info!("Current total handlers: {}", handlers.len());
     }
 
     /// 清理旧处理器
@@ -681,7 +681,7 @@ impl ConnectionManager {
         let mut handlers = self.disconnect_handlers.lock().await;
         
         if handlers.remove(&handler_id).is_some() {
-            info!("移除旧处理器: {}", handler_id);
+            info!("Removed old handler: {}", handler_id);
         }
     }
 
@@ -695,11 +695,11 @@ impl ConnectionManager {
         // 找到匹配的处理器并执行
         {
             let handlers = self.disconnect_handlers.lock().await;
-            info!("找到 {} 个断开连接处理器", handlers.len());
+            info!("Found {} disconnect handlers", handlers.len());
             
             for (key, handler) in handlers.iter() {
                 if key.starts_with(&prefix) {
-                    info!("执行断开连接处理器: {}", key);
+                    info!("Executing disconnect handler: {}", key);
                     handler();
                     keys_to_remove.push(key.clone());
                 }
@@ -711,7 +711,7 @@ impl ConnectionManager {
             let mut handlers = self.disconnect_handlers.lock().await;
             for key in keys_to_remove {
                 handlers.remove(&key);
-                info!("移除已执行的处理器: {}", key);
+                info!("Removed executed handler: {}", key);
             }
         }
     }
@@ -732,9 +732,9 @@ impl ConnectionManager {
             let mut stats = self.stats.lock().await;
             stats.messages_sent += count;
             
-            info!("向房间 {} 广播事件 {}, 接收客户端数: {}", room_id, event, count);
+            info!("Broadcast event {} to room {}, received by {} clients", event, room_id, count);
         } else {
-            warn!("尝试向不存在或空的房间广播: {}", room_id);
+            warn!("Attempted to broadcast to non-existent or empty room: {}", room_id);
         }
         
         Ok(count)
@@ -759,13 +759,13 @@ impl ConnectionManager {
                     let mut stats = self.stats.lock().await;
                     stats.messages_sent += 1;
                     
-                    info!("向客户端 {} 发送事件 {}", client_id, event);
+                    info!("Sent event {} to client {}", event, client_id);
                     return Ok(true);
                 }
             }
         }
         
-        warn!("客户端 {} 未找到或发送失败", client_id);
+        warn!("Client {} not found or send failed", client_id);
         Ok(false)
     }
     

@@ -56,7 +56,6 @@ module citadel::citadel {
     public struct ManagerStore has key {
         id: UID,
         profiles: Table<address, address>, // Passport到Profile的映射
-        profile_count: u64,
         ongoing_matches: vector<ID>,
         match_count: u64,
         lobby_count: u64,
@@ -339,7 +338,6 @@ module citadel::citadel {
         let manager = ManagerStore {
             id: object::new(ctx),
             profiles: table::new(ctx),
-            profile_count: 0,
             ongoing_matches: vector::empty(),
             match_count: 0,
             lobby_count: 0,
@@ -418,9 +416,7 @@ module citadel::citadel {
         let profile_id = object::uid_to_address(&profile.id);
         
         // 更新管理器
-        table::add(&mut manager.profiles, passport_id, profile_id);
-        manager.profile_count = manager.profile_count + 1;
-        
+        table::add(&mut manager.profiles, passport_id, profile_id);        
         // 初始化好友关系存储
         table::add(&mut friendship.relations, profile_id, vector::empty<FriendRelation>());
         
@@ -484,7 +480,6 @@ module citadel::citadel {
         
         // 更新管理器
         table::add(&mut manager.profiles, passport_id, profile_id);
-        manager.profile_count = manager.profile_count + 1;
         
         // 初始化好友关系存储
         table::add(&mut friendship.relations, profile_id, vector::empty<FriendRelation>());
