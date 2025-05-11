@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect } from "react";
 import { Coins, Sparkles } from "lucide-react";
 import { AppContext } from "@/context/AppContext";
-import { ConnectModal, useDisconnectWallet } from "@mysten/dapp-kit";
+import { ConnectModal } from "@mysten/dapp-kit";
 import ConnectMenu from "@/app/components/ui/connectMenu";
 import { Link as LinkIcon } from "lucide-react";
 import { usePassport } from "@/hooks/usePassport";
@@ -11,7 +11,7 @@ import { useUserAssets } from "@/hooks/useUserAssets";
 import { useNetwork } from "@/hooks/useNetwork";
 import DialogModal from "@/app/components/dashboard/components/dialog-modal";
 
-export default function Header() {
+export const Header = () => {
   const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
   const [showNetworkDialog, setShowNetworkDialog] = useState(false);
 
@@ -19,35 +19,82 @@ export default function Header() {
   const {
     hasPassport,
     isCreating,
+    isChecking,
     error: passportError,
+    success,
     createNewUser,
   } = usePassport();
-  const { assets, fetchAssets, error: assetsError } = useUserAssets();
-  const { isCorrectNetwork, expectedNetwork } = useNetwork();
-  const { mutate: disconnect } = useDisconnectWallet();
+  const {
+    assets,
+    fetchAssets,
+    isLoading: isLoadingAssets,
+    error: assetsError,
+  } = useUserAssets();
+  const { isCorrectNetwork, expectedNetwork, checkNetwork } = useNetwork();
 
   // Monitor wallet connection, network, and passport status
   useEffect(() => {
-    if (walletAddress) {
-      if (isCorrectNetwork === false) {
-        setShowNetworkDialog(true);
-        setShowWelcomeDialog(false);
-      } else if (isCorrectNetwork === true && hasPassport === true) {
-        setShowNetworkDialog(false);
+    if (!walletAddress) {
+      setShowNetworkDialog(false);
+      setShowWelcomeDialog(false);
+      return;
+    }
+
+    // Don't show any dialogs while checking passport status
+    if (isChecking) {
+      return;
+    }
+
+    // Check network status first
+    if (isCorrectNetwork === false) {
+      setShowNetworkDialog(true);
+      setShowWelcomeDialog(false);
+      return;
+    }
+
+    // Network is correct, check passport status
+    if (isCorrectNetwork === true) {
+      setShowNetworkDialog(false);
+
+      // Show welcome dialog only if we've confirmed user doesn't have a passport
+      if (hasPassport === false) {
         setShowWelcomeDialog(true);
+      } else {
+        setShowWelcomeDialog(false);
       }
     }
-  }, [walletAddress, isCorrectNetwork, hasPassport]);
+  }, [walletAddress, isCorrectNetwork, hasPassport, isChecking]);
+
+  // Handle network change
+  useEffect(() => {
+    const handleNetworkChange = async () => {
+      checkNetwork();
+      // Refresh assets and check passport when network changes
+      if (walletAddress) {
+        await fetchAssets();
+      }
+    };
+
+    window.addEventListener("sui_networkChange", handleNetworkChange);
+    return () => {
+      window.removeEventListener("sui_networkChange", handleNetworkChange);
+    };
+  }, [walletAddress, checkNetwork, fetchAssets]);
 
   // Handle new user creation
   const handleCreateUser = async () => {
-    const success = await createNewUser();
-    if (success) {
-      setShowWelcomeDialog(false);
-      // Refresh user assets
-      await fetchAssets();
-    }
+    await createNewUser();
   };
+
+  useEffect(() => {
+    if (success && walletAddress) {
+      console.log("Passport creation successful, refreshing assets...");
+      const timer = setTimeout(async () => {
+        await fetchAssets();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, walletAddress, fetchAssets]);
 
   return (
     <>
@@ -71,13 +118,13 @@ export default function Header() {
                   <div className="flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full">
                     <Coins className="h-3 w-3 text-yellow-400" />
                     <span className="text-white font-medium text-xs">
-                      {assets.coins}
+                      {isLoadingAssets ? "..." : assets.coins}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full">
                     <Sparkles className="h-3 w-3 text-blue-400" />
                     <span className="text-white font-medium text-xs">
-                      {assets.fragments}
+                      {isLoadingAssets ? "..." : assets.fragments}
                     </span>
                   </div>
                   <ConnectMenu
@@ -167,4 +214,4 @@ export default function Header() {
       />
     </>
   );
-}
+};

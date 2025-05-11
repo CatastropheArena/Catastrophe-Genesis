@@ -1,32 +1,45 @@
+import { useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
 import { useEffect, useState } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
 
-export const useNetwork = () => {
+export function useNetwork() {
+  const wallet = useCurrentWallet();
+  const account = useCurrentAccount();
   const [isCorrectNetwork, setIsCorrectNetwork] = useState<boolean | null>(
     null
   );
-  const account = useCurrentAccount();
+  const expectedNetwork = process.env.NEXT_PUBLIC_NETWORK || "testnet";
 
   const checkNetwork = () => {
-    if (!account) {
+    if (!wallet.currentWallet || !account) {
       setIsCorrectNetwork(null);
       return;
     }
 
-    // 检查当前链是否匹配期望的网络
     const currentChain = account.chains[0];
-    const expectedNetwork =
-      process.env.NEXT_PUBLIC_NETWORK?.toLowerCase() || "testnet";
-    const isCorrect = currentChain === `sui:${expectedNetwork}`;
+    const isCorrect = currentChain
+      ?.toLowerCase()
+      .includes(expectedNetwork.toLowerCase());
     setIsCorrectNetwork(isCorrect);
   };
 
   useEffect(() => {
     checkNetwork();
-  }, [account?.chains]);
+
+    // Add event listener for network changes
+    const handleNetworkChange = () => {
+      checkNetwork();
+    };
+
+    window.addEventListener("sui_networkChange", handleNetworkChange);
+
+    return () => {
+      window.removeEventListener("sui_networkChange", handleNetworkChange);
+    };
+  }, [wallet.currentWallet, account]);
 
   return {
     isCorrectNetwork,
-    expectedNetwork: process.env.NEXT_PUBLIC_NETWORK || "testnet",
+    expectedNetwork,
+    checkNetwork,
   };
-};
+}

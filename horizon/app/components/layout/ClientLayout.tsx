@@ -1,6 +1,6 @@
 "use client";
 
-import Header from "@/app/components/header/header";
+import { Header } from "@/app/components/header/header";
 
 export default function ClientLayout({
   children,

@@ -154,6 +154,8 @@ export default function Dashboard() {
     error: cardsError,
     fetchCards,
   } = useUserCards();
+  console.log("cards", cards);
+
   const { handleSignAndExecuteTransaction, isLoading: isExecuting } =
     useBetterSignAndExecuteTransaction({
       tx: () => {
@@ -190,7 +192,7 @@ export default function Dashboard() {
     coins: 1000,
     fragments: 500,
     usdt: 100,
-    cards: mockCards,
+    cards: cards,
   });
 
   const [activeTab, setActiveTab] = useState("collection");
@@ -497,7 +499,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-b from-purple-900 via-violet-800 to-indigo-900 text-white">
       <div className="container mx-auto px-4 py-8">
         {/* Asset Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card className="bg-purple-900/50 border-purple-500/30">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -520,7 +522,7 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </div> */}
 
         {/* Main Content Area */}
         <Tabs
