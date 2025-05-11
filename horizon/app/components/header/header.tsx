@@ -157,7 +157,7 @@ export const Header = () => {
       {/* Network Switch Dialog */}
       <DialogModal
         open={showNetworkDialog}
-        onOpenChange={() => {}} // Prevent manual closing
+        onOpenChange={(open) => setShowNetworkDialog(open)}
         title="Network Switch Required"
         description={
           <>
@@ -175,13 +175,13 @@ export const Header = () => {
           </>
         }
         type="network"
-        confirmText=""
+        confirmText="I Understand"
         data={null}
         isLoading={false}
-        confirmAction={() => {}}
-        hideCancel={true}
-        preventClose={true}
-        hideCloseButton={true}
+        confirmAction={() => setShowNetworkDialog(false)}
+        hideCancel={false}
+        preventClose={false}
+        hideCloseButton={false}
       />
 
       {/* Welcome Dialog */}

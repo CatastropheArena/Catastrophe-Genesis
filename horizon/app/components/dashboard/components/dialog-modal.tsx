@@ -144,7 +144,15 @@ export default function DialogModal({
         {renderDialogContent()}
 
         <DialogFooter className="flex sm:justify-center gap-2">
-          {type === "network" ? null : type === "welcome" ? (
+          {type === "network" ? (
+            <Button
+              onClick={() => confirmAction?.()}
+              className="bg-gradient-to-r from-purple-600 to-pink-600"
+              disabled={isLoading}
+            >
+              {isLoading ? "Processing..." : confirmText}
+            </Button>
+          ) : type === "welcome" ? (
             <Button
               onClick={() => confirmAction?.()}
               className="bg-gradient-to-r from-purple-600 to-pink-600"
