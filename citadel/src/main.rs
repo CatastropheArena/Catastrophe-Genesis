@@ -16,8 +16,9 @@ use nautilus_server::app::process_data;
 use nautilus_server::catastrophe::{
     auth_middleware, generate_avatar, 
     handle_session_token,
+    handle_encrypted_session_token,
     handle_create_profile,
-    handle_get_profile,
+    handle_get_profile
 };
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
@@ -96,6 +97,7 @@ async fn start_server() -> Result<()> {
         .route("/v1/service", get(handle_get_service))
         .route("/get_attestation", get(get_attestation))
         .route("/auth/session_token", post(handle_session_token))
+        .route("/auth/encrypted_session_token", post(handle_encrypted_session_token))
         .route("/user/avatar", get(generate_avatar))
         .route("/test/create_profile", post(handle_create_profile))
         .route("/test/get_profile", post(handle_get_profile)); 

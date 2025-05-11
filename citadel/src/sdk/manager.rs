@@ -116,21 +116,14 @@ impl GameManager {
                 }
                 info!("get_profile_id_by_passport passport_id: {:?}", passport_id);
 
-                // 查询表格获取所有映射
-                let fields = query_all_table_content(&self.network, &self.profile_table_id, None).await?;
-                info!("get_profile_id_by_passport fields: {:?}", fields);
-                // 更新映射
-                let mut map = self.passport_profile_map.write().await;
-                for field in fields {
-                    let passport: ObjectID =
-                        ObjectID::from_hex_literal(&field.name).context("Failed to parse passport ID")?;
-                    let profile: ObjectID =
-                        ObjectID::from_hex_literal(&field.value).context("Failed to parse profile ID")?;
-                    map.insert(passport, profile);
-                }
+                // 更新所有profiles数据
+                self.update_all_profiles().await?;
 
                 // 再次尝试获取
-                map.get(passport_id)
+                self.passport_profile_map
+                    .read()
+                    .await
+                    .get(passport_id)
                     .copied()
                     .context("Profile not found for passport")
             }
@@ -254,5 +247,17 @@ impl GameManager {
         );
 
         Ok(())
+    }
+
+    /// 更新PassportID到ProfileID的映射缓存
+    pub async fn update_passport_profile_mapping(&self, passport_id: ObjectID, profile_id: ObjectID) {
+        let mut map = self.passport_profile_map.write().await;
+        map.insert(passport_id, profile_id);
+    }
+
+    /// 更新Profile缓存
+    pub async fn update_profile_cache(&self, profile: Profile) {
+        let mut cache = self.profile_cache.write().await;
+        cache.insert(profile.id, profile);
     }
 }

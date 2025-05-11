@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{env, str::FromStr, sync::Arc};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, warn,error};
 
 use anyhow::Context;
 use sui_sdk::{json::SuiJsonValue, rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponse}};
@@ -15,6 +15,7 @@ use sui_types::{
 use anyhow::Result;
 use sui_sdk::SuiClient;
 use crate::{app, txb};
+use crate::sdk::manager::Profile;
 
 /**
  * 为护照创建用户档案
@@ -87,6 +88,37 @@ pub async fn create_profile_for_passport(
     let response = crate::txb::execute_transaction(sui_client, tx_data, &keystore, &sender)
         .await
         .context("执行交易失败")?;
-    
+    let digest = app_state.network.explorer_tx_url(&response.digest.to_string());
+    info!("Successfully executed transaction: {}", &digest);
+    if !response.status_ok().unwrap_or(false) {
+        anyhow::bail!("Transaction execution failed: {:?}, transaction: {}", response.effects.as_ref().unwrap(), digest);
+    }
+
+    // 从事务响应中提取新创建的Profile对象并更新缓存
+    if let Some(changes) = &response.object_changes {
+        for change in changes {
+            if let sui_sdk::rpc_types::ObjectChange::Created { object_id, object_type, .. } = change {
+                if object_type.to_string().ends_with("::citadel::Profile") {
+                    // 创建Profile对象
+                    let profile = Profile {
+                        id: *object_id,
+                        avatar: avatar.to_string(),
+                        rating: 1000, // 默认初始分数
+                        played: 0,
+                        won: 0,
+                        lost: 0,
+                    };
+
+                    // 更新缓存
+                    app_state.game_manager.update_passport_profile_mapping(passport_id, *object_id).await;
+                    app_state.game_manager.update_profile_cache(profile).await;
+                    
+                    info!("已更新缓存 - PassportID: {}, ProfileID: {}", passport_id, object_id);
+                    break;
+                }
+            }
+        }
+    }
+
     Ok(response)
 }

@@ -18,7 +18,7 @@ use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crypto::elgamal::encrypt;
+use crypto::elgamal::{encrypt};
 use crypto::ibe;
 use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
 use fastcrypto::encoding::{Base64, Encoding};
@@ -33,14 +33,14 @@ use sui_sdk::types::signature::GenericSignature;
 use sui_sdk::types::transaction::{Command, Argument, CallArg, ProgrammableTransaction, TransactionKind};
 use sui_sdk::verify_personal_message_signature::verify_personal_message_signature;
 use tap::TapFallible;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, warn,error};
 
 use crate::errors::InternalError;
 use crate::externals::{current_epoch_time, fetch_first_and_last_pkg_id};
 use crate::keys::{check_request, Certificate};
 use crate::metrics::call_with_duration;
 use crate::metrics::Metrics;
-use crate::types::{ElGamalPublicKey, ElgamalVerificationKey, MasterKeyPOP, GAS_BUDGET};
+use crate::types::{ElGamalPublicKey, ElgamalVerificationKey, ElgamalEncryption, MasterKeyPOP, GAS_BUDGET};
 use crate::AppState;
 use axum::{
     extract::{Request},
@@ -229,6 +229,8 @@ pub struct SessionTokenRequest {
 pub struct SessionTokenResponse {
     pub auth_token: String, // JWT格式的授权令牌
     pub expires_at: u64,    // 令牌过期时间（Unix时间戳，毫秒）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<Profile>,
 }
 
 /**
@@ -279,27 +281,16 @@ fn create_session_token_response(
     SessionTokenResponse {
         auth_token,
         expires_at,
+        profile: None,
     }
 }
 
-/**
- * 处理获取密钥请求
- *
- * 处理客户端的密钥请求，验证其有效性并返回加密的密钥
- *
- * 参数:
- * @param app_state - 应用状态
- * @param headers - HTTP请求头
- * @param payload - 请求负载
- *
- * 返回:
- * 成功时返回密钥响应，失败时返回错误
- */
-pub async fn handle_session_token(
-    State(app_state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    Json(payload): Json<SessionTokenRequest>,
-) -> Result<Json<SessionTokenResponse>, InternalError> {
+/// 处理获取密钥的核心逻辑
+async fn handle_session_token_core(
+    app_state: &Arc<AppState>,
+    headers: &HeaderMap,
+    payload: &SessionTokenRequest,
+) -> Result<SessionTokenResponse, InternalError> {
     let req_id = headers
         .get("Request-Id")
         .map(|v| v.to_str().unwrap_or_default());
@@ -315,9 +306,8 @@ pub async fn handle_session_token(
         req_id, version, sdk_type, target_api_version, valid_function
     );
 
-    // seal_approve_verify_nexus_passport
     check_request(
-        &app_state,
+        app_state,
         &payload.ptb,
         &payload.enc_key,
         &payload.enc_verification_key,
@@ -340,46 +330,140 @@ pub async fn handle_session_token(
     };
 
     let valid_ptb = ValidPtb::try_from(ptb.clone()).unwrap();
-    // 检查签名的ptb是否是执行的函数
-    if valid_ptb.full_function() == valid_function {
-        // 获取 passport ID
-        let passport_id = match valid_ptb.inner_ids().first() {
-            Some(id) => match String::from_utf8(id.clone()) {
-                Ok(id_str) => id_str,
-                Err(_) => return Err(InternalError::InvalidPTB),
-            },
-            None => return Err(InternalError::InvalidPTB),
-        };
-
-        // 生成头像
-        let svg = make_avatar(&passport_id);
-        
-        // 将 SVG 转换为 base64
-        let svg_base64 = Base64::encode(svg.as_bytes());
-        let avatar_data = format!("data:image/svg+xml;base64,{}", svg_base64);
-
-        // 创建用户档案
-        match create_profile_for_passport(
-            &app_state,
-            &passport_id,
-            &avatar_data,
-        ).await {
-            Ok(_) => {
-                info!("成功为用户 {} 创建档案", passport_id);
-            },
-            Err(e) => {
-                warn!("为用户 {} 创建档案失败: {:?}", passport_id, e);
-            }
-        }
-
-        Ok(Json(create_session_token_response(
-            &app_state,
-            &payload.certificate,
-        )))
-    } else {
-        Err(InternalError::InvalidPTB)
+    if valid_ptb.full_function() != valid_function {
+        return Err(InternalError::InvalidPTB);
     }
-    .tap_err(|e| app_state.metrics.observe_error(e.as_str()))
+
+    // 获取 passport ID
+    let passport_id = match valid_ptb.inner_ids().first() {
+        Some(id) => match String::from_utf8(id.clone()) {
+            Ok(id_str) => id_str,
+            Err(_) => return Err(InternalError::InvalidPTB),
+        },
+        None => return Err(InternalError::InvalidPTB),
+    };
+
+    // 生成头像
+    let svg = make_avatar(&passport_id);
+    let svg_base64 = Base64::encode(svg.as_bytes());
+    let avatar_data = format!("data:image/svg+xml;base64,{}", svg_base64);
+
+    // 获取或创建用户档案
+    let profile = match ObjectID::from_hex_literal(&passport_id) {
+        Ok(passport_obj_id) => {
+            match app_state.game_manager.get_profile_id_by_passport(&passport_obj_id).await {
+                Ok(profile_id) => {
+                    match app_state.game_manager.get_profile(&profile_id).await {
+                        Ok(profile) => {
+                            info!("Found existing profile for passport {}: {:?}", passport_id, profile);
+                            Some(profile)
+                        },
+                        Err(e) => {
+                            error!("Failed to get profile data for {}: {:?}", passport_id, e);
+                            None
+                        }
+                    }
+                },
+                Err(_) => {
+                    match create_profile_for_passport(
+                        app_state,
+                        &passport_id,
+                        &avatar_data,
+                    ).await {
+                        Ok(_) => {
+                            info!("Successfully created profile for {}", passport_id);
+                            match ObjectID::from_hex_literal(&passport_id) {
+                                Ok(passport_obj_id) => {
+                                    match app_state.game_manager.get_profile_id_by_passport(&passport_obj_id).await {
+                                        Ok(profile_id) => {
+                                            match app_state.game_manager.get_profile(&profile_id).await {
+                                                Ok(profile) => Some(profile),
+                                                Err(e) => {
+                                                    error!("Failed to get new profile data for {}: {:?}", passport_id, e);
+                                                    None
+                                                }
+                                            }
+                                        },
+                                        Err(e) => {
+                                            error!("Failed to get new profile id for {}: {:?}", passport_id, e);
+                                            None
+                                        }
+                                    }
+                                },
+                                Err(e) => {
+                                    error!("Invalid passport ID format after creation: {:?}", e);
+                                    None
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            error!("Create profile for {} failed: {:?}", passport_id, e);
+                            None
+                        }
+                    }
+                }
+            }
+        },
+        Err(e) => {
+            error!("Invalid passport ID format: {:?}", e);
+            return Err(InternalError::InvalidPTB);
+        }
+    };
+
+    let mut response = create_session_token_response(
+        app_state,
+        &payload.certificate,
+    );
+
+    if let Some(profile_data) = profile {
+        response.profile = Some(profile_data);
+    }
+
+    Ok(response)
+}
+
+/// 原始的session token处理函数
+pub async fn handle_session_token(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<SessionTokenRequest>,
+) -> Result<Json<SessionTokenResponse>, InternalError> {
+    handle_session_token_core(&app_state, &headers, &payload)
+        .await
+        .map(Json)
+        .tap_err(|e| app_state.metrics.observe_error(e.as_str()))
+}
+
+/// 加密的session token响应
+#[derive(Serialize, Deserialize)]
+pub struct EncryptedSessionTokenResponse {
+    pub encrypted_data: ElgamalEncryption,
+}
+
+/// 加密版本的session token处理函数
+pub async fn handle_encrypted_session_token(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<SessionTokenRequest>,
+) -> Result<Json<EncryptedSessionTokenResponse>, InternalError> {
+    // 获取核心响应
+    let response = handle_session_token_core(&app_state, &headers, &payload).await?;
+    
+    // 序列化响应
+    let response_bytes = serde_json::to_vec(&response)
+        .map_err(|_| InternalError::SerializationError)?;
+    
+    // 使用用户的公钥加密响应
+    let key = ibe::extract(&app_state.master_key, response_bytes.as_slice());
+    let encrypted_data = encrypt(
+        &mut thread_rng(),
+        &key,
+        &payload.enc_key,
+    );
+
+    Ok(Json(EncryptedSessionTokenResponse {
+        encrypted_data,
+    }))
 }
 
 /// 头像请求参数
