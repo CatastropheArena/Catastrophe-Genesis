@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles - 这些将与global-styles.tsx配合使用 */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 其他margin、padding和box-sizing在global-styles.tsx中已定义 */
+}
+
+/* 自定义滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 字体定义 - 路径需要根据实际项目结构调整 */
+@font-face {
+  font-family: "Miriam Libre";
+  font-weight: 400;
+  src: url("@shared/assets/fonts/MiriamLibre-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Miriam Libre";
+  font-weight: 700;
+  src: url("@shared/assets/fonts/MiriamLibre-Bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Bungee";
+  font-weight: 400;
+  src: url("@shared/assets/fonts/Bungee-Regular.woff2") format("woff2");
+}
+
+/* 自定义工具类 - 路径需要根据实际项目结构调整 */
+@layer utilities {
+  .bg-light {
+    background-image: url("@shared/assets/bg-light.svg");
+    background-size: contain;
+  }
+
+  .bg-dark {
+    background-image: url("@shared/assets/bg-dark.svg");
+    background-size: contain;
+  }
+}
+
+/* 原有的动画类，现在可以通过tailwind动画类替代 
+.fadeIn {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.slideUp {
+  animation: slideUp 0.3s ease-out;
+}
+
+.slideInRight {
+  animation: slideInRight 0.3s ease-out;
+}
+*/

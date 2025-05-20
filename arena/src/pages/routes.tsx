@@ -8,8 +8,6 @@ import {UserPage} from "./user";
 import {MatchPage} from "./match";
 import {PlayPage} from "./play";
 import {LeaderboardPage} from "./leaderboard";
-import {AboutPage} from "./about";
-import {SignUpPage} from "./auth/sign-up";
 import {SignInPage} from "./auth/sign-in";
 
 export const Routes: React.FC = () => (
@@ -67,14 +65,6 @@ export const Routes: React.FC = () => (
       element={
         <PrivateRoute>
           <LeaderboardPage />
-        </PrivateRoute>
-      }
-    />
-    <Route
-      path="/about"
-      element={
-        <PrivateRoute>
-          <AboutPage />
         </PrivateRoute>
       }
     />

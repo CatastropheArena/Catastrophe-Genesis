@@ -26,17 +26,13 @@ export const Avatar: React.FC<AvatarProps> = ({
   size,
   src,
   className,
-  variant,
+  variant = "circular",
 }) => (
   <Wrapper size={size} className={className}>
     <Image variant={variant} src={src} alt="avatar" />
     {showStatus && <Status type={status!} />}
   </Wrapper>
 );
-
-Avatar.defaultProps = {
-  variant: "circular",
-};
 
 interface WrapperStyledProps {
   size?: StylingSize;

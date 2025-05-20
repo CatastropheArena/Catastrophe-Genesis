@@ -97,11 +97,11 @@ const Player = styled(Layout.Col, {shouldForwardProp})<PlayerStyledProps>`
       opacity: 1;
     `}
 
-  &:first-child {
+  &:first-of-type {
     margin-left: auto;
   }
 
-  &:last-child {
+  &:last-of-type {
     margin-right: auto;
   }
 `;

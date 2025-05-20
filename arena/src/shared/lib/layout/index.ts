@@ -88,7 +88,7 @@ const Col = styled("div", {shouldForwardProp})<LayoutProps>`
   ${mixin}
 
   ${(props) => css`
-    & > :not(:first-child) {
+    & > :not(:first-of-type) {
       margin-top: ${size(props.gap)};
     }
   `}
@@ -108,7 +108,7 @@ const Row = styled("div", {shouldForwardProp})<LayoutProps>`
   ${mixin}
 
   ${(props) => css`
-    & > :not(:first-child) {
+    & > :not(:first-of-type) {
       margin-left: ${size(props.gap)};
     }
   `}

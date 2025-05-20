@@ -8,5 +8,5 @@
     "declaration": true,
     "emitDeclarationOnly": true
   },
-  "include": ["vite.config.ts"]
-}
+  "include": ["vitest.config.ts", "vitest.config.js"]
+} 

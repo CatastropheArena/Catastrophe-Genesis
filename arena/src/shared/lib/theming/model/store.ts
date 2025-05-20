@@ -9,7 +9,7 @@ export interface ThemingReducer {
 
 export const store = createReducer<ThemingReducer>(
   {
-    theme: (localStorage.getItem("theme") as Theme) || "light",
+    theme: (localStorage.getItem("theme") as Theme) || "system",
   },
   {
     [actions.setTheme.type]: (
@@ -17,6 +17,7 @@ export const store = createReducer<ThemingReducer>(
       {payload}: PayloadAction<actions.SetThemePayload>,
     ) => {
       state.theme = payload;
+      localStorage.setItem("theme", payload);
     },
   },
 );

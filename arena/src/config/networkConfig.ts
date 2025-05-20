@@ -1,14 +1,15 @@
 import {createNetworkConfig, NetworkConfig} from "@mysten/dapp-kit";
 import { getRpcNodes } from "./rpcNodeList";
 
-export const TESTNET_NEXUS_PACKAGE_ID =
-    "0x499780b7b435096e8b39e870c81748d6bea1d71e115dd681952b6869dd3c3c4a";
 export const TESTNET_CITADEL_OBJECT_ID =
     "0xe10eb87f0020b576a9394699e9cfbe35fe4bd4800411d8558b3f0e281142b27e";
 
 // 定义具体的 Variables 类型
 interface Variables {
     NexusPackage: string;
+    NexusPassportState: string;
+    NexusTreasury: string;
+    NexusFragmentStore: string;
     CitadelPackage: string;
 }
 
@@ -17,15 +18,21 @@ const {networkConfig, useNetworkVariable, useNetworkVariables} =
         testnet: {
             url: getRpcNodes("testnet")[0].url,
             variables: {
-                NexusPackage: TESTNET_NEXUS_PACKAGE_ID,
+                NexusPackage: import.meta.env.VITE_PUBLIC_TESTNET_PACKAGE || '',
                 CitadelPackage: TESTNET_CITADEL_OBJECT_ID,
+                NexusPassportState: import.meta.env.VITE_PUBLIC_TESTNET_PASSPORT_STATE || '',
+                NexusTreasury: import.meta.env.VITE_PUBLIC_TESTNET_TREASURY || '',
+                NexusFragmentStore: import.meta.env.VITE_PUBLIC_TESTNET_FRAGMENT_STORE || '',
             }
         },
         mainnet: {
             url: getRpcNodes("mainnet")[0].url,
             variables: {
-                NexusPackage: TESTNET_NEXUS_PACKAGE_ID,
+                NexusPackage: import.meta.env.VITE_PUBLIC_TESTNET_PACKAGE || '',
                 CitadelPackage: TESTNET_CITADEL_OBJECT_ID,
+                NexusPassportState: import.meta.env.VITE_PUBLIC_TESTNET_PASSPORT_STATE || '',
+                NexusTreasury: import.meta.env.VITE_PUBLIC_TESTNET_TREASURY || '',
+                NexusFragmentStore: import.meta.env.VITE_PUBLIC_TESTNET_FRAGMENT_STORE || '',
             }
         },
     } as Record<string, NetworkConfig<Variables>>);
@@ -39,6 +46,5 @@ export function getNetworkVariables(network: Network) {
 export function getDefaultRpcUrl(network: Network) {
     return getRpcNodes(network)[0].url;
 }
-
 
 export {useNetworkVariable, useNetworkVariables, networkConfig};

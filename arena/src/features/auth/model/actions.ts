@@ -92,33 +92,3 @@ export const setAreCredentialsFetching =
   createAction<SetAreCredentialsFetchingPayload>(
     `${prefix}/setAreCredentialsFetching`,
   );
-
-// 新增 SessionKey 认证方法
-export const sessionKeyAuth = createAsyncThunk(
-  "auth/sessionKeyAuth",
-  async (data: authApi.SessionKeyAuthData, { rejectWithValue }) => {
-    try {
-      const response = await authApi.sessionKeyAuth(data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(
-        error?.response?.data?.message || "钱包认证失败",
-      );
-    }
-  },
-);
-
-// 新增 检查游戏通行证方法
-export const checkGameEntry = createAsyncThunk(
-  "auth/checkGameEntry",
-  async (data: authApi.CheckGameEntryData, { rejectWithValue }) => {
-    try {
-      const response = await authApi.checkGameEntry(data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(
-        error?.response?.data?.message || "检查游戏通行证失败",
-      );
-    }
-  },
-);

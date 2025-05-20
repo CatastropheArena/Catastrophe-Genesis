@@ -38,9 +38,6 @@ export const NavigationalSidebar: React.FC = () => {
           <Link to="/leaderboard">
             <TrophyIcon active={location.pathname === "/leaderboard"} />
           </Link>
-          <Link to="/about">
-            <AboutIcon active={location.pathname === "/about"} />
-          </Link>
         </Navigation>
 
         <SettingsIcon onClick={() => open()} />
@@ -123,15 +120,6 @@ const PlayIcon = styled(Icon.Play, {
 `;
 
 const TrophyIcon = styled(Icon.Trophy, {
-  shouldForwardProp: shouldForwardProp.icon,
-})<IconStyledProps>`
-  ${mixin.icon}
-
-  fill: ${({theme, active}) =>
-    active ? theme.palette.primary.main : theme.palette.text.secondary};
-`;
-
-const AboutIcon = styled(Icon.About, {
   shouldForwardProp: shouldForwardProp.icon,
 })<IconStyledProps>`
   ${mixin.icon}

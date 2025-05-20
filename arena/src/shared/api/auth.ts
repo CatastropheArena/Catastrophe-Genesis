@@ -1,7 +1,6 @@
 import {AxiosPromise} from "axios";
 
 import {request} from "@shared/lib/request";
-import { getAllowlistedKeyServers, SealClient, SessionKey } from '@mysten/seal';
 import {Credentials, FormVerification} from "./common";
 
 export interface GetCredentialsResponse {
@@ -35,35 +34,6 @@ export interface SignInResponse {
 const signIn = (data: SignInData): AxiosPromise<SignInResponse> =>
   request({url: "/auth/login", method: "POST", data});
 
-export interface SessionKeyAuthData {
-  signature: string;
-  sessionKey: string;
-  address: string;
-  timestamp: number;
-  ttlMin: number;
-}
-
-export interface SessionKeyAuthResponse {
-  credentials: Credentials;
-  hasGameEntry: boolean;
-  isNewUser: boolean;
-}
-
-const sessionKeyAuth = (data: SessionKeyAuthData): AxiosPromise<SessionKeyAuthResponse> =>
-  request({url: "/auth/session-key", method: "POST", data});
-
-export interface CheckGameEntryData {
-  address: string;
-}
-
-export interface CheckGameEntryResponse {
-  hasGameEntry: boolean;
-  passportId?: string;
-}
-
-const checkGameEntry = (data: CheckGameEntryData): AxiosPromise<CheckGameEntryResponse> =>
-  request({url: "/auth/check-game-entry", method: "POST", data});
-
 export interface VerifyUsernameData {
   username: string;
 }
@@ -75,11 +45,4 @@ const verifyUsername = (
 ): AxiosPromise<VerifyUsernameResponse> =>
   request({url: "/auth/verify/username", method: "POST", data});
 
-export const authApi = {
-  getCredentials,
-  signUp,
-  signIn,
-  verifyUsername,
-  sessionKeyAuth,
-  checkGameEntry
-};
+export const authApi = {getCredentials, signUp, signIn, verifyUsername};
