@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +22,6 @@ import {
   StakedCard,
 } from "@/app/types";
 import { useToast } from "@/components/ui/use-toast";
-import { useUserCards } from "@/hooks/useUserCards";
 import { useBetterSignAndExecuteTransaction } from "@/hooks/useBetterTx";
 import { Transaction } from "@mysten/sui/transactions";
 import { useUserBalance } from "@/hooks/useUserBalance";
@@ -34,34 +33,12 @@ import CardStakingPools from "./components/card-staking-pools";
 import Exchange from "./components/exchange";
 import GameMatches from "./components/game-matches";
 import DialogModal from "./components/dialog-modal";
-
-// Mock data
-const mockCards: CardItem[] = [
-  {
-    id: 1,
-    name: "Skip Card",
-    rarity: "Common",
-    image: "/placeholder.svg?height=200&width=150",
-    count: 2,
-    status: "owned",
-  },
-  {
-    id: 2,
-    name: "See the Future",
-    rarity: "Uncommon",
-    image: "/placeholder.svg?height=200&width=150",
-    count: 1,
-    status: "owned",
-  },
-  {
-    id: 3,
-    name: "Shuffle",
-    rarity: "Rare",
-    image: "/placeholder.svg?height=200&width=150",
-    count: 1,
-    status: "owned",
-  },
-];
+import { useUserAssets } from "@/hooks/useUserAssets";
+import { useAssets } from "@/context/AssetsContext";
+import { useLoading } from "@/context/LoadingContext";
+import { useCardStore } from "@/stores/useCardStore";
+import { useContext } from "react";
+import { AppContext } from "@/context/AppContext";
 
 const mockRentalCards: RentalCard[] = [
   {
@@ -148,44 +125,17 @@ interface DialogStateType {
 export default function Dashboard() {
   const router = useRouter();
   const { toast } = useToast();
-  const {
-    cards,
-    isLoading: isLoadingCards,
-    error: cardsError,
-    fetchCards,
-  } = useUserCards();
-  console.log("cards", cards);
-
-  const { handleSignAndExecuteTransaction, isLoading: isExecuting } =
-    useBetterSignAndExecuteTransaction({
-      tx: () => {
-        // Find a coin with sufficient balance
-        const paymentCoin = fishBalance.coins.find(
-          (coin) => BigInt(coin.balance) >= BigInt(1000)
-        );
-        if (!paymentCoin) {
-          throw new Error("No single coin object has sufficient balance");
-        }
-
-        const tx = new Transaction();
-        tx.moveCall({
-          target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::card::draw_card`,
-          arguments: [
-            tx.object("0x8"),
-            tx.object(paymentCoin.coinObjectId),
-            tx.object(`${process.env.NEXT_PUBLIC_TESTNET_TREASURY}`),
-            tx.object("0x6"),
-          ],
-        });
-        return tx;
-      },
-    });
+  const { cards, isLoading, error, fetchCards } = useCardStore();
   const account = useCurrentAccount();
+  const client = useSuiClient();
   const {
     balance: fishBalance,
     isLoading: isLoadingBalance,
     refetch: refetchBalance,
   } = useUserBalance();
+  const { fetchAssets } = useAssets();
+  const { showLoading, hideLoading } = useLoading();
+  const { walletAddress } = useContext(AppContext);
 
   // State management
   const [assets, setAssets] = useState({
@@ -215,13 +165,50 @@ export default function Dashboard() {
     isLoading: false,
   });
 
+  const { handleSignAndExecuteTransaction } =
+    useBetterSignAndExecuteTransaction({
+      tx: () => {
+        const tx = new Transaction();
+
+        // 如果有多个 coin 对象，先合并再分割出500
+        if (fishBalance.coins.length > 1) {
+          let baseCoin = fishBalance.coins[0].coinObjectId;
+          let all_list = fishBalance.coins
+            .slice(1)
+            .map((coin) => coin.coinObjectId);
+          tx.mergeCoins(baseCoin, all_list);
+        }
+        const coin = tx.splitCoins(
+          tx.object(fishBalance.coins[0].coinObjectId),
+          [tx.pure.u64(500)]
+        );
+
+        // 调用 draw_card 函数
+        tx.moveCall({
+          target: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::card::draw_card`,
+          arguments: [
+            tx.object("0x8"),
+            coin,
+            tx.object(`${process.env.NEXT_PUBLIC_TESTNET_TREASURY}`),
+            tx.object("0x6"),
+          ],
+        });
+
+        return tx;
+      },
+      options: {
+        showEffects: true,
+        showObjectChanges: true,
+      },
+    });
+
   // Collection functions
   const handleGetMoreClick = () => {
-    if (fishBalance.totalBalance < BigInt(1000)) {
+    if (fishBalance.totalBalance < BigInt(500)) {
       setDialogState({
         open: true,
         title: "Insufficient Balance",
-        description: "You need 1000 FISH tokens to purchase a card.",
+        description: "You need 500 FISH tokens to purchase a card.",
         type: "error",
         confirmText: "OK",
         data: null,
@@ -233,8 +220,7 @@ export default function Dashboard() {
     setDialogState({
       open: true,
       title: "Purchase Card",
-      description:
-        "Would you like to spend 1000 FISH tokens to draw a new card?",
+      description: "Would you like to spend 500 FISH coins to draw a new card?",
       type: "confirm",
       confirmText: "Purchase",
       cancelText: "Cancel",
@@ -391,6 +377,12 @@ export default function Dashboard() {
     }
   }, [account, router]);
 
+  useEffect(() => {
+    if (walletAddress) {
+      fetchCards(walletAddress, client);
+    }
+  }, [walletAddress, fetchCards, client]);
+
   // 修改 DialogModal 的 confirmAction
   const handleDialogConfirm = async () => {
     const { type, data } = dialogState;
@@ -400,37 +392,40 @@ export default function Dashboard() {
         if (data?.action === "drawCard") {
           setDialogState((prev) => ({ ...prev, isLoading: true }));
           try {
-            await handleSignAndExecuteTransaction()
+            showLoading("抽卡中...");
+            console.log("drawCard", fishBalance.coins);
+            const result = await handleSignAndExecuteTransaction()
               .beforeExecute(async () => {
                 // Recheck balance before executing
                 await refetchBalance();
-                if (fishBalance.totalBalance < BigInt(1000)) {
-                  throw new Error("Insufficient balance");
+                if (fishBalance.totalBalance < BigInt(500)) {
+                  throw new Error("余额不足");
                 }
                 return true;
               })
               .onSuccess(async () => {
                 toast({
-                  title: "Success",
-                  description: "Successfully drew a new card!",
+                  title: "成功",
+                  description: "抽卡成功！",
                   variant: "default",
                 });
-                // Refresh card list and balance
-                await Promise.all([fetchCards(), refetchBalance()]);
+                // 刷新卡牌列表和余额
+                await fetchAssets();
+                await fetchCards(walletAddress as string, client);
+                await refetchBalance();
               })
-              .onError((error) => {
+              .onError((error: any) => {
                 toast({
-                  title: "Error",
-                  description: error.message || "Failed to draw card",
+                  title: "错误",
+                  description: error.message || "抽卡失败",
                   variant: "destructive",
                 });
               })
               .execute();
           } catch (error) {
             toast({
-              title: "Error",
-              description:
-                error instanceof Error ? error.message : "Failed to draw card",
+              title: "错误",
+              description: error instanceof Error ? error.message : "抽卡失败",
               variant: "destructive",
             });
           } finally {
@@ -439,6 +434,7 @@ export default function Dashboard() {
               isLoading: false,
               open: false,
             }));
+            hideLoading();
           }
         } else if (data?.card) {
           // Rental confirmation
@@ -537,7 +533,7 @@ export default function Dashboard() {
             >
               Collection
             </TabsTrigger>
-            <TabsTrigger
+            {/* <TabsTrigger
               value="rental"
               className="data-[state=active]:bg-purple-700"
             >
@@ -548,7 +544,7 @@ export default function Dashboard() {
               className="data-[state=active]:bg-purple-700"
             >
               Staking
-            </TabsTrigger>
+            </TabsTrigger> */}
             <TabsTrigger
               value="exchange"
               className="data-[state=active]:bg-purple-700"
@@ -565,7 +561,10 @@ export default function Dashboard() {
 
           <TabsContent value="collection" className="mt-4">
             <CardCollection
-              cards={assets.cards}
+              cards={cards}
+              isLoading={isLoading}
+              error={error}
+              onRefresh={() => fetchCards(walletAddress as string, client)}
               onGetMoreClick={handleGetMoreClick}
             />
           </TabsContent>
