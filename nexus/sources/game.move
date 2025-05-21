@@ -5,6 +5,8 @@ module nexus::game{
     use nexus::passport::{Self, Passport};
     use nexus::treasury::{Self, Treasury};
     use nexus::fish::FISH;
+    use sui::object::{Self, UID};
+    use sui::tx_context::{Self, TxContext};
 
     //---------------------------------------------- Error Codes ----------------------------------------------//
     const EIncorrectPaymentAmount: u64 = 0;
@@ -54,5 +56,10 @@ module nexus::game{
             game_id: game,
             timestamp: clock::timestamp_ms(clock),
         }
+    }
+    
+    /// 获取 GameEntry 中的护照 ID
+    public fun get_passport_id(game_entry: &GameEntry): address {
+        game_entry.user_passport
     }
 }
