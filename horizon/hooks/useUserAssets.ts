@@ -3,12 +3,14 @@ import { useCallback, useEffect, useState } from "react";
 import { SuiObjectData } from "@mysten/sui/client";
 
 interface Assets {
+  sui: number;
   coins: number;
   fragments: number;
 }
 
 export function useUserAssets() {
   const [assets, setAssets] = useState<Assets>({
+    sui: 0,
     coins: 0,
     fragments: 0,
   });
@@ -21,6 +23,7 @@ export function useUserAssets() {
   const fetchAssets = useCallback(async () => {
     if (!account?.address) {
       setAssets({
+        sui: 0,
         coins: 0,
         fragments: 0,
       });
@@ -35,6 +38,11 @@ export function useUserAssets() {
       const coins = await client.getBalance({
         owner: account.address,
         coinType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::fish::FISH`,
+      });
+
+      const sui = await client.getBalance({
+        owner: account.address,
+        coinType: `0x2::sui::SUI`,
       });
 
       // Initialize fragment total
@@ -86,6 +94,7 @@ export function useUserAssets() {
 
       // 创建一个全新的对象来触发重新渲染
       const newAssets = {
+        sui: Number(sui.totalBalance),
         coins: Number(coins.totalBalance),
         fragments: totalFragments,
       };

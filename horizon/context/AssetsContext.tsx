@@ -4,6 +4,7 @@ import { createContext, useContext, ReactNode } from "react";
 import { useUserAssets } from "@/hooks/useUserAssets";
 
 interface Assets {
+  sui: number;
   coins: number;
   fragments: number;
 }

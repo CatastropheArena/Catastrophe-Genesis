@@ -6,6 +6,8 @@ import { CoinStruct } from "@mysten/sui/client";
 export interface CoinBalance {
   totalBalance: bigint;
   coins: CoinStruct[];
+  suiBalance: bigint;
+  suiCoins: CoinStruct[];
 }
 
 export function useUserBalance() {
@@ -14,6 +16,8 @@ export function useUserBalance() {
   const [balance, setBalance] = useState<CoinBalance>({
     totalBalance: BigInt(0),
     coins: [],
+    suiBalance: BigInt(0),
+    suiCoins: [],
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -30,9 +34,17 @@ export function useUserBalance() {
         owner: account.address,
         coinType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::fish::FISH`,
       });
+      const { data: suiCoins } = await client.getCoins({
+        owner: account.address,
+        coinType: `0x2::sui::SUI`,
+      });
 
       // Calculate total balance
       const totalBalance = coins.reduce(
+        (sum, coin) => sum + BigInt(coin.balance),
+        BigInt(0)
+      );
+      const suiBalance = suiCoins.reduce(
         (sum, coin) => sum + BigInt(coin.balance),
         BigInt(0)
       );
@@ -40,6 +52,8 @@ export function useUserBalance() {
       setBalance({
         totalBalance,
         coins,
+        suiBalance,
+        suiCoins,
       });
     } catch (err) {
       setError(

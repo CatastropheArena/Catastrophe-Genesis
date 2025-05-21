@@ -65,16 +65,16 @@ export default function CardCollection({
     );
   }
 
-  if (!cards.length) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex flex-col items-center gap-3">
-          <InboxIcon className="h-8 w-8 text-purple-300" />
-          <p className="text-sm text-purple-100">还没有卡牌哦，快去抽卡吧！</p>
-        </div>
-      </div>
-    );
-  }
+  // if (!cards.length) {
+  //   return (
+  //     <div className="flex items-center justify-center h-64">
+  //       <div className="flex flex-col items-center gap-3">
+  //         <InboxIcon className="h-8 w-8 text-purple-300" />
+  //         <p className="text-sm text-purple-100">还没有卡牌哦，快去抽卡吧！</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // 过滤卡片
   const filteredCards =
