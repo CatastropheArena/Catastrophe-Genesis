@@ -1,27 +1,88 @@
-"use client"
+"use client";
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Sparkles } from "lucide-react";
+import {
+  Layers,
+  Sparkles,
+  Loader2,
+  AlertCircle,
+  InboxIcon,
+} from "lucide-react";
 import { CardItem } from "@/app/types";
 
 interface CardCollectionProps {
   cards: CardItem[];
+  isLoading?: boolean;
+  error?: string | null;
+  onRefresh: () => void;
   onGetMoreClick: () => void;
   defaultFilter?: string;
 }
 
-export default function CardCollection({ 
-  cards, 
+export default function CardCollection({
+  cards,
+  isLoading = false,
+  error = null,
+  onRefresh,
   onGetMoreClick,
-  defaultFilter = "All" 
+  defaultFilter = "All",
 }: CardCollectionProps) {
   const [cardFilter, setCardFilter] = useState(defaultFilter);
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-purple-300" />
+          <p className="text-sm text-purple-100">加载卡牌中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-3">
+          <AlertCircle className="h-8 w-8 text-red-400" />
+          <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={onRefresh}
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+          >
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // if (!cards.length) {
+  //   return (
+  //     <div className="flex items-center justify-center h-64">
+  //       <div className="flex flex-col items-center gap-3">
+  //         <InboxIcon className="h-8 w-8 text-purple-300" />
+  //         <p className="text-sm text-purple-100">还没有卡牌哦，快去抽卡吧！</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+
   // 过滤卡片
   const filteredCards =
-    cardFilter === "All" ? cards : cards.filter((card) => card?.status?.toLowerCase() === cardFilter.toLowerCase());
+    cardFilter === "All"
+      ? cards
+      : cards.filter(
+          (card) => card?.status?.toLowerCase() === cardFilter.toLowerCase()
+        );
 
   return (
     <Card className="bg-black/40 backdrop-blur-md border-purple-500/30">
@@ -62,15 +123,19 @@ export default function CardCollection({
                   alt={card.name}
                   className="w-full aspect-[3/4] object-cover rounded-lg"
                 />
-                {card.status !== "owned" && (
+                {/* {card.status !== "owned" && (
                   <div className="absolute top-0 left-0 right-0 bg-black/70 px-1 py-0.5 text-[8px] text-center">
                     {card.status === "rented" ? (
-                      <span className="text-green-400">RENTED · {card.usesLeft} uses left</span>
+                      <span className="text-green-400">
+                        RENTED · {card.usesLeft} uses left
+                      </span>
                     ) : (
-                      <span className="text-blue-400">STAKED · {card.poolShare}</span>
+                      <span className="text-blue-400">
+                        STAKED · {card.poolShare}
+                      </span>
                     )}
                   </div>
-                )}
+                )} */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex flex-col justify-end p-1">
                   <h3 className="text-white font-bold text-xs">{card.name}</h3>
                   <div className="flex justify-between items-center mt-0.5">
@@ -81,16 +146,18 @@ export default function CardCollection({
                           card.rarity === "Common"
                             ? "bg-blue-600"
                             : card.rarity === "Uncommon"
-                              ? "bg-purple-600"
-                              : card.rarity === "Rare"
-                                ? "bg-orange-600"
-                                : "bg-red-600"
+                            ? "bg-purple-600"
+                            : card.rarity === "Rare"
+                            ? "bg-orange-600"
+                            : "bg-red-600"
                         }
                       `}
                     >
                       {card.rarity}
                     </Badge>
-                    <span className="text-white text-[10px]">x{card.count}</span>
+                    <span className="text-white text-[10px]">
+                      x{card.count}
+                    </span>
                   </div>
                 </div>
               </div>

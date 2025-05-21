@@ -11,6 +11,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastContainer } from "react-toastify";
 import { Inter } from "next/font/google";
 import MetaTagsContainer from "@/components/metaTagsContainer/metaTagsContainer";
+import { AssetsProvider } from "@/context/AssetsContext";
+import { LoadingProvider } from "@/context/LoadingContext";
+import { Loading } from "@/app/components/ui/loading";
+
 const inter = Inter({ subsets: ["latin"] });
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -28,19 +32,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <SuiWalletProvider>
             <AppContextProvider>
               <TooltipProvider>
-                {children}
-                <ToastContainer
-                  theme="dark"
-                  draggable
-                  position="bottom-right"
-                  className={"mt-20"}
-                  toastClassName={(context) =>
-                    "relative flex py-3.5 px-4 mx-4 min-h-10 mb-5 rounded-md justify-between overflow-hidden cursor-pointer bg-white/20 backdrop-blur-md"
-                  }
-                  toastStyle={{
-                    WebkitBackdropFilter: "blur(12px)",
-                  }}
-                />
+                <LoadingProvider>
+                  <AssetsProvider>
+                    {children}
+                    <Loading />
+                    <ToastContainer
+                      theme="dark"
+                      draggable
+                      position="bottom-right"
+                      className={"mt-20"}
+                      toastClassName={(context) =>
+                        "relative flex py-3.5 px-4 mx-4 min-h-10 mb-5 rounded-md justify-between overflow-hidden cursor-pointer bg-white/20 backdrop-blur-md"
+                      }
+                      toastStyle={{
+                        WebkitBackdropFilter: "blur(12px)",
+                      }}
+                    />
+                  </AssetsProvider>
+                </LoadingProvider>
               </TooltipProvider>
             </AppContextProvider>
           </SuiWalletProvider>

@@ -7,7 +7,7 @@ import { ConnectModal } from "@mysten/dapp-kit";
 import ConnectMenu from "@/app/components/ui/connectMenu";
 import { Link as LinkIcon } from "lucide-react";
 import { usePassport } from "@/hooks/usePassport";
-import { useUserAssets } from "@/hooks/useUserAssets";
+import { useAssets } from "@/context/AssetsContext";
 import { useNetwork } from "@/hooks/useNetwork";
 import DialogModal from "@/app/components/dashboard/components/dialog-modal";
 
@@ -29,7 +29,7 @@ export const Header = () => {
     fetchAssets,
     isLoading: isLoadingAssets,
     error: assetsError,
-  } = useUserAssets();
+  } = useAssets();
   const { isCorrectNetwork, expectedNetwork, checkNetwork } = useNetwork();
 
   // Monitor wallet connection, network, and passport status
@@ -103,7 +103,7 @@ export const Header = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <img
-                src="/placeholder.svg?height=40&width=40"
+                src="/logo.png?height=120&width=120"
                 alt="Logo"
                 className="h-6 w-6"
               />

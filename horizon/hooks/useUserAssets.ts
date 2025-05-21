@@ -3,12 +3,14 @@ import { useCallback, useEffect, useState } from "react";
 import { SuiObjectData } from "@mysten/sui/client";
 
 interface Assets {
+  sui: number;
   coins: number;
   fragments: number;
 }
 
 export function useUserAssets() {
   const [assets, setAssets] = useState<Assets>({
+    sui: 0,
     coins: 0,
     fragments: 0,
   });
@@ -20,11 +22,11 @@ export function useUserAssets() {
 
   const fetchAssets = useCallback(async () => {
     if (!account?.address) {
-      let tempAssets = Object.assign({}, assets, {
+      setAssets({
+        sui: 0,
         coins: 0,
         fragments: 0,
       });
-      setAssets(tempAssets);
       return;
     }
 
@@ -36,6 +38,11 @@ export function useUserAssets() {
       const coins = await client.getBalance({
         owner: account.address,
         coinType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::fish::FISH`,
+      });
+
+      const sui = await client.getBalance({
+        owner: account.address,
+        coinType: `0x2::sui::SUI`,
       });
 
       // Initialize fragment total
@@ -85,15 +92,16 @@ export function useUserAssets() {
         });
       }
 
-      // Create a new assets object to trigger React re-render
+      // 创建一个全新的对象来触发重新渲染
       const newAssets = {
+        sui: Number(sui.totalBalance),
         coins: Number(coins.totalBalance),
         fragments: totalFragments,
       };
 
-      console.log("newAssets", newAssets);
+      console.log("Fetched new assets:", newAssets);
 
-      // Update state with the new assets object
+      // 使用函数式更新确保使用最新状态
       setAssets(newAssets);
     } catch (err) {
       console.error("Failed to fetch assets:", err);
@@ -103,7 +111,7 @@ export function useUserAssets() {
     }
   }, [account?.address, client]);
 
-  // Fetch assets when wallet changes
+  // 监听钱包地址变化时重新获取资产
   useEffect(() => {
     fetchAssets();
   }, [account?.address, fetchAssets]);

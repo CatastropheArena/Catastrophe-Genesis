@@ -1,4 +1,5 @@
 // 基础资产接口
+import React from "react";
 export interface Assets {
   coins: number;
   fragments: number;
@@ -8,15 +9,17 @@ export interface Assets {
 
 // 基础卡片接口
 export interface CardItem {
-  id: number | string;
+  id: string | number;
   name: string;
+  description: string;
+  strategy: string;
   rarity: string;
   image: string;
+  cost: number;
+  dynamicCost: number;
+  level: number;
   count: number;
   status: "owned" | "rented" | "staked";
-  usesLeft?: number;
-  poolShare?: string;
-  expiresIn?: number;
 }
 
 // 租赁卡片接口
