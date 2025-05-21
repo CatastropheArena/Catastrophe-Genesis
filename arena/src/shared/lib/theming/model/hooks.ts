@@ -9,31 +9,11 @@ export const useTheme = () => {
   const theme = useSelector(selectors.theme);
   const dispatch = useDispatch();
   
-  // 计算实际应用的主题（考虑系统主题）
-  const effectiveTheme = useMemo(() => {
-    if (theme === 'system') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return theme;
-  }, [theme]);
+  // 不再需要计算effectiveTheme，因为没有system选项
   
   const toggleTheme = () => {
-    // 在 light、dark 和 system 之间循环切换
-    let newTheme: Theme;
-    
-    switch (theme) {
-      case "light":
-        newTheme = "dark";
-        break;
-      case "dark":
-        newTheme = "system";
-        break;
-      case "system":
-      default:
-        newTheme = "light";
-        break;
-    }
-    
+    // 只在 light 和 dark 之间切换
+    const newTheme: Theme = theme === "light" ? "dark" : "light";
     dispatch(actions.setTheme(newTheme));
   };
   
@@ -43,7 +23,6 @@ export const useTheme = () => {
   
   return { 
     mode: theme,
-    effectiveTheme, // 添加有效主题
     toggleTheme,
     setTheme
   };

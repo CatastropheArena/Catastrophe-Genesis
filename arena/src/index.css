@@ -2,30 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Base styles - 这些将与global-styles.tsx配合使用 */
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* 其他margin、padding和box-sizing在global-styles.tsx中已定义 */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 122 39% 49%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 122 39% 49%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 122 39% 49%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 122 39% 49%;
+  }
 }
 
-/* 自定义滚动条样式 */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
+@keyframes float {
+  0% {
+    transform: translateY(0) translateX(0);
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px);
+  }
+  50% {
+    transform: translateY(-10px) translateX(20px);
+  }
+  75% {
+    transform: translateY(-30px) translateX(-10px);
+  }
+  100% {
+    transform: translateY(0) translateX(0);
+  }
 }
 
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
+@keyframes border-flow {
+  0% {
+    background-position: 0% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 /* 字体定义 - 路径需要根据实际项目结构调整 */
@@ -60,16 +117,136 @@ body {
   }
 }
 
-/* 原有的动画类，现在可以通过tailwind动画类替代 
-.fadeIn {
-  animation: fadeIn 0.3s ease-in;
+
+/* 自定义网络选择按钮 */
+.ant-web3-connect-button-chain-select-button {
+  /* 修改按钮背景色 */
+  background-color: #686666; 
+  /* 修改按钮边框 */
+  border: 1px solid #8BC34A !important;
+  /* 修改按钮圆角 */
+  border-radius: 8px !important;
+  /* 添加过渡效果 */
+  transition: all 0.3s ease;
 }
 
-.slideUp {
-  animation: slideUp 0.3s ease-out;
+/* 暗色模式下的按钮样式 */
+.dark .ant-web3-connect-button-chain-select-button {
+  /* 暗色模式背景色 */
+  background-color: rgba(30, 35, 42, 0.8);
+  /* 暗色模式边框 */
+  border: 1px solid #8BC34A !important;
 }
 
-.slideInRight {
-  animation: slideInRight 0.3s ease-out;
+/* 鼠标悬停时的样式 */
+.ant-web3-connect-button-chain-select-button:hover {
+  background-color: #79867a;
+  border-color: #4CAF50 !important;
 }
-*/
+
+/* 暗色模式下鼠标悬停时的样式 */
+.dark .ant-web3-connect-button-chain-select-button:hover {
+  background-color: rgba(30, 35, 42, 0.8); /* 保持与非悬停状态相同的背景色 */
+  border-color: #9CCC65 !important;
+}
+
+/* 网络选择下拉菜单 */
+.ant-web3-connect-button-chain-select {
+  /* 修改文字颜色 */
+  color: #4CAF50;
+  /* 修改字体大小 */
+  font-size: 14px;
+  /* 修改内边距 */
+  padding: 4px 8px;
+  /* 添加字体样式 */
+  font-family: 'Miriam Libre', monospace;
+}
+
+/* 暗色模式下的下拉菜单文字 */
+.dark .ant-web3-connect-button-chain-select {
+  color: #8BC34A;
+}
+
+/* 网络图标样式 */
+.ant-web3-icon-sui-colorful {
+  /* 修改图标大小 */
+  font-size: 18px !important;
+}
+
+/* 钱包地址样式 - 亮色模式 */
+.wallet-address {
+  font-family: monospace;
+  color: #4CAF50;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 钱包地址样式 - 暗色模式 */
+.dark .wallet-address {
+  color: #8BC34A;
+}
+
+/* 下拉菜单样式 - 在打开网络选择器时生效 */
+.ant-dropdown-menu {
+  /* 菜单背景色 */
+  background-color: #ffffff;
+  /* 菜单圆角 */
+  border-radius: 10px;
+  /* 菜单阴影 */
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16);
+}
+
+/* 暗色模式下拉菜单样式 */
+.dark .ant-dropdown-menu {
+  background-color: #242830;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* 菜单项样式 */
+.ant-dropdown-menu-item {
+  /* 菜单项文字颜色 */
+  color: #333333;
+  /* 菜单项内边距 */
+  padding: 10px 16px;
+}
+
+/* 暗色模式菜单项样式 */
+.dark .ant-dropdown-menu-item {
+  color: #f20000;
+}
+
+/* 鼠标悬停在菜单项上的样式 */
+.ant-dropdown-menu-item:hover {
+  /* 悬停背景色 */
+  background-color: #f0f9ff;
+}
+
+/* 暗色模式鼠标悬停在菜单项上的样式 */
+.dark .ant-dropdown-menu-item:hover {
+  background-color: #353a45;
+}
+
+/* 钱包容器样式 */
+.wallet-container {
+  position: relative;
+  background-color: #f5f5f5;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+/* 暗色模式钱包容器 */
+.dark .wallet-container {
+  background-color: rgba(30, 35, 42, 0.8);
+}
+
+/* 暗色模式下钱包容器悬停状态 */
+.dark .wallet-container:hover {
+  background-color: rgba(30, 35, 42, 0.8); /* 保持与非悬停状态相同的背景色 */
+  border-color: #9CCC65 !important;
+}

@@ -16,14 +16,13 @@ import {GlobalStyles} from "./global-styles";
 import {DesktopOnlyRestrict} from "./desktop-only";
 import { SettingsSidebar } from "./settings-sidebar";
 import { SignInPage } from "@pages/auth/sign-in";
-import { SignUpPage } from "@pages/auth/sign-up";
+// import { SignUpPage } from "@pages/auth/sign-up";
 const styles = <GlobalStyles />;
 
 export const App: React.FC = () => (
   <ThemingProvider>
     {styles}
     <React.Suspense>
-      <SettingsSidebar>
       <NotificationProvider>
         <DesktopOnlyRestrict>
           {/* <CredentialsObtainer> */}
@@ -35,7 +34,9 @@ export const App: React.FC = () => (
                     {/* <LobbyHandler> */}
                       {/* <LobbyIndicator /> */}
                       {/* <Routes /> */}
+                      <SettingsSidebar>
                       <SignInPage />
+                      </SettingsSidebar>
                       {/* <SignUpPage/> */}
                     {/* </LobbyHandler> */}
                   {/* </MatchRejoinBoundary> */}
@@ -45,7 +46,6 @@ export const App: React.FC = () => (
           {/* </CredentialsObtainer> */}
         </DesktopOnlyRestrict>
       </NotificationProvider>
-      </SettingsSidebar>
     </React.Suspense>
   </ThemingProvider>
 );

@@ -62,12 +62,12 @@ export const CollapsibleSidebar: React.FC<CollapsibleSidebarProps> = ({
       {/* 侧边栏内容 */}
       <div
         className={`
-          flex flex-col items-center p-2 
+          flex flex-col items-center p-4 
           bg-white/80 dark:bg-slate-900/80 backdrop-blur-md
           shadow-lg dark:shadow-slate-900/20 rounded-r-xl h-fit self-center 
           relative transition-all duration-300 ease-in-out
           border-r border-t border-b border-gray-200 dark:border-slate-700/50
-          ${isCollapsed ? 'hidden' : 'w-4'}
+          ${isCollapsed ? 'hidden' : 'w-12'}
         `}
       >
         {children}
@@ -80,12 +80,12 @@ export const CollapsibleSidebar: React.FC<CollapsibleSidebarProps> = ({
         >
             {isCollapsed ? (
               <ChevronRight 
-                className="w-4 h-4 transition-transform duration-300 ease-in-out hover:scale-110 text-gray-500 dark:text-gray-300 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer"
+                className="w-8 h-8 transition-transform duration-300 ease-in-out hover:scale-110 text-gray-500 dark:text-gray-300 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer"
                 onClick={toggleSidebar}
               />
             ) : (
               <ChevronLeft 
-                className="w-4 h-4 transition-transform duration-300 ease-in-out hover:scale-110 text-gray-500 dark:text-gray-300 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer"
+                className="w-8 h-8 transition-transform duration-300 ease-in-out hover:scale-110 text-gray-500 dark:text-gray-300 hover:text-violet-600 dark:hover:text-violet-400 cursor-pointer"
                 onClick={toggleSidebar}
               />
             )}
