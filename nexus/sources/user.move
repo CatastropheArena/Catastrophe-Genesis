@@ -6,12 +6,14 @@ module nexus::user{
     use nexus::passport::{Self, State, Passport};
     use nexus::fragment::{Self, FragmentStore};
     use nexus::fish::{FISH};
+    use sui::sui::SUI;
 
     //---------------------------------------------- Error Codes ----------------------------------------------//
     const EIncorrectPaymentAmount: u64 = 0;
 
     //---------------------------------------------- Consts ----------------------------------------------//
     const FRAGMENT_TO_COIN_RATE: u64 = 2; // 100 coin :: 50 Fragments
+    const FISH_TO_SUI_RATE: u64 = 100; // 100 FISH :: 1 SUI
 
     //---------------------------------------------- Entry functions ----------------------------------------------//
     public entry fun create_new_user(
@@ -75,5 +77,16 @@ module nexus::user{
         fragment::buy_fragments(amount, store, clock, ctx);
     }
 
-    
+    public fun buy_fish(
+      treasury: &mut Treasury,
+      payment: Coin<SUI>,
+      amount: u64,
+      clock: &Clock,
+      ctx: &mut TxContext,
+    ){
+      let sender = tx_context::sender(ctx);
+      assert!(coin::value(&payment)/1_000_000_000 == amount/FISH_TO_SUI_RATE, EIncorrectPaymentAmount);
+      treasury::deposit_sui(treasury, payment, clock, ctx);
+      transfer::public_transfer(treasury::withdraw(treasury, amount, ctx), sender);
+    }
 }
