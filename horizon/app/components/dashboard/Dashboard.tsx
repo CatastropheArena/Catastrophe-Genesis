@@ -21,10 +21,8 @@ import {
   StakingPool,
   StakedCard,
 } from "@/app/types";
-import { useToast } from "@/components/ui/use-toast";
 import { useBetterSignAndExecuteTransaction } from "@/hooks/useBetterTx";
 import { Transaction } from "@mysten/sui/transactions";
-import { useUserBalance } from "@/hooks/useUserBalance";
 
 // Import components
 import CardCollection from "./components/card-collection";
@@ -39,6 +37,7 @@ import { useLoading } from "@/context/LoadingContext";
 import { useCardStore } from "@/stores/useCardStore";
 import { useContext } from "react";
 import { AppContext } from "@/context/AppContext";
+import { toast } from "react-toastify";
 
 const mockRentalCards: RentalCard[] = [
   {
@@ -85,7 +84,7 @@ const mockGameMatches: GameMatch[] = [
     id: 1,
     name: "Beginner Room",
     level: "Beginner",
-    entryFee: 10,
+    entryFee: 100,
     currentPlayers: 2,
     maxPlayers: 6,
     rewards: 50,
@@ -96,7 +95,7 @@ const mockGameMatches: GameMatch[] = [
     id: 2,
     name: "Pro Room",
     level: "Advanced",
-    entryFee: 50,
+    entryFee: 100,
     currentPlayers: 4,
     maxPlayers: 6,
     rewards: 250,
@@ -124,26 +123,20 @@ interface DialogStateType {
 
 export default function Dashboard() {
   const router = useRouter();
-  const { toast } = useToast();
   const { cards, isLoading, error, fetchCards } = useCardStore();
   const account = useCurrentAccount();
   const client = useSuiClient();
-  const {
-    balance: fishBalance,
-    isLoading: isLoadingBalance,
-    refetch: refetchBalance,
-  } = useUserBalance();
-  const { fetchAssets } = useAssets();
+  const { assets, fetchAssets } = useAssets();
   const { showLoading, hideLoading } = useLoading();
   const { walletAddress } = useContext(AppContext);
 
   // State management
-  const [assets, setAssets] = useState({
-    coins: 1000,
-    fragments: 500,
-    usdt: 100,
-    cards: cards,
-  });
+  // const [assets, setAssets] = useState({
+  //   coins: 1000,
+  //   fragments: 500,
+  //   usdt: 100,
+  //   cards: cards,
+  // });
 
   const [activeTab, setActiveTab] = useState("collection");
   const [gameState, setGameState] = useState("connecting");
@@ -165,21 +158,56 @@ export default function Dashboard() {
     isLoading: false,
   });
 
+  const { handleSignAndExecuteTransaction: handleJoinGameTransaction } =
+    useBetterSignAndExecuteTransaction({
+      tx: () => {
+        const tx = new Transaction();
+        // 如果有多个 coin 对象，先合并再分割出500
+        if (assets.fishCoins.length > 1) {
+          let baseCoin = assets.fishCoins[0].coinObjectId;
+          let all_list = assets.fishCoins
+            .slice(1)
+            .map((coin) => coin.coinObjectId);
+          tx.mergeCoins(baseCoin, all_list);
+        }
+        const coin = tx.splitCoins(
+          tx.object(assets.fishCoins[0].coinObjectId),
+          [tx.pure.u64(100)]
+        );
+        tx.moveCall({
+          target: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::game::join_game`,
+          arguments: [
+            tx.object(`${assets.passport?.data?.objectId}`),
+            tx.object(`${process.env.NEXT_PUBLIC_TESTNET_TREASURY}`),
+            coin,
+            tx.pure.address("0x1"),
+            tx.pure.string("Join game"),
+            tx.object("0x6"),
+          ],
+        });
+        return tx;
+      },
+      options: {
+        showEffects: true,
+        showObjectChanges: true,
+      },
+    });
+
   const { handleSignAndExecuteTransaction } =
     useBetterSignAndExecuteTransaction({
       tx: () => {
         const tx = new Transaction();
 
         // 如果有多个 coin 对象，先合并再分割出500
-        if (fishBalance.coins.length > 1) {
-          let baseCoin = fishBalance.coins[0].coinObjectId;
-          let all_list = fishBalance.coins
+        if (assets.fishCoins.length > 1) {
+          let baseCoin = assets.fishCoins[0].coinObjectId;
+          let all_list = assets.fishCoins
             .slice(1)
             .map((coin) => coin.coinObjectId);
           tx.mergeCoins(baseCoin, all_list);
         }
         const coin = tx.splitCoins(
-          tx.object(fishBalance.coins[0].coinObjectId),
+          tx.object(assets.fishCoins[0].coinObjectId),
           [tx.pure.u64(500)]
         );
 
@@ -204,7 +232,9 @@ export default function Dashboard() {
 
   // Collection functions
   const handleGetMoreClick = () => {
-    if (fishBalance.totalBalance < BigInt(500)) {
+    console.log("assets.coins", assets.coins);
+
+    if (Number(assets.coins) < 500) {
       setDialogState({
         open: true,
         title: "Insufficient Balance",
@@ -232,18 +262,18 @@ export default function Dashboard() {
   // Rental functions
   const handleRentCard = (card: RentalCard, uses: number, period: number) => {
     const cost = card.rate * period;
-    if (assets.coins < cost) {
-      setDialogState({
-        open: true,
-        title: "Insufficient Funds",
-        description: "You don't have enough coins to rent this card.",
-        type: "error",
-        confirmText: "OK",
-        data: null,
-        isLoading: false,
-      });
-      return;
-    }
+    // if (assets.coins < cost) {
+    //   setDialogState({
+    //     open: true,
+    //     title: "Insufficient Funds",
+    //     description: "You don't have enough coins to rent this card.",
+    //     type: "error",
+    //     confirmText: "OK",
+    //     data: null,
+    //     isLoading: false,
+    //   });
+    //   return;
+    // }
 
     setDialogState({
       open: true,
@@ -259,33 +289,32 @@ export default function Dashboard() {
 
   // Staking functions
   const handleStakeCard = (pool: StakingPool) => {
-    const userCard = assets.cards.find(
-      (c) => c.name === pool.name.replace(" Pool", "")
-    );
-    if (!userCard || userCard.count === 0) {
-      setDialogState({
-        open: true,
-        title: "Cannot Stake",
-        description:
-          "You don't have any cards available to stake in this pool.",
-        type: "error",
-        confirmText: "OK",
-        data: null,
-        isLoading: false,
-      });
-      return;
-    }
-
-    setDialogState({
-      open: true,
-      title: "Stake Cards",
-      description: `How many ${userCard.name} cards would you like to stake?`,
-      type: "stakeInput",
-      confirmText: "Stake",
-      cancelText: "Cancel",
-      data: { pool, maxAmount: userCard.count },
-      isLoading: false,
-    });
+    // const userCard = assets.cards.find(
+    //   (c) => c.name === pool.name.replace(" Pool", "")
+    // );
+    // if (!userCard || userCard.count === 0) {
+    //   setDialogState({
+    //     open: true,
+    //     title: "Cannot Stake",
+    //     description:
+    //       "You don't have any cards available to stake in this pool.",
+    //     type: "error",
+    //     confirmText: "OK",
+    //     data: null,
+    //     isLoading: false,
+    //   });
+    //   return;
+    // }
+    // setDialogState({
+    //   open: true,
+    //   title: "Stake Cards",
+    //   description: `How many ${userCard.name} cards would you like to stake?`,
+    //   type: "stakeInput",
+    //   confirmText: "Stake",
+    //   cancelText: "Cancel",
+    //   data: { pool, maxAmount: userCard.count },
+    //   isLoading: false,
+    // });
   };
 
   const handleUnstakeCard = (card: any) => {
@@ -316,10 +345,10 @@ export default function Dashboard() {
       // 模拟API调用延迟
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      setAssets((prev) => ({
-        ...prev,
-        coins: prev.coins + 100,
-      }));
+      // setAssets((prev) => ({
+      //   ...prev,
+      //   coins: prev.coins + 100,
+      // }));
 
       setDialogState({
         open: true,
@@ -349,7 +378,7 @@ export default function Dashboard() {
       setDialogState({
         open: true,
         title: "Insufficient Funds",
-        description: `You need ${game.entryFee} coins to join this game.`,
+        description: `You need ${game.entryFee} FISH coins to join this game.`,
         type: "error",
         confirmText: "OK",
         data: null,
@@ -361,11 +390,11 @@ export default function Dashboard() {
     setDialogState({
       open: true,
       title: "Join Game",
-      description: `Join ${game.name} for ${game.entryFee} coins?`,
+      description: `Join ${game.name} for ${game.entryFee} FISH coins?`,
       type: "confirm",
       confirmText: "Join",
       cancelText: "Cancel",
-      data: game,
+      data: { ...game, action: "joinGame" },
       isLoading: false,
     });
   };
@@ -392,42 +421,65 @@ export default function Dashboard() {
         if (data?.action === "drawCard") {
           setDialogState((prev) => ({ ...prev, isLoading: true }));
           try {
-            showLoading("抽卡中...");
-            console.log("drawCard", fishBalance.coins);
+            showLoading("Drawing card...");
+            console.log("drawCard", assets.suiCoins, assets.fishCoins);
             const result = await handleSignAndExecuteTransaction()
               .beforeExecute(async () => {
                 // Recheck balance before executing
-                await refetchBalance();
-                if (fishBalance.totalBalance < BigInt(500)) {
-                  throw new Error("余额不足");
+                await fetchAssets();
+                if (assets.coins < 500) {
+                  throw new Error("Insufficient balance");
                 }
                 return true;
               })
               .onSuccess(async () => {
-                toast({
-                  title: "成功",
-                  description: "抽卡成功！",
-                  variant: "default",
-                });
-                // 刷新卡牌列表和余额
+                toast.success("Card drawn successfully!");
+                // Refresh card list and balance
                 await fetchAssets();
                 await fetchCards(walletAddress as string, client);
-                await refetchBalance();
               })
               .onError((error: any) => {
-                toast({
-                  title: "错误",
-                  description: error.message || "抽卡失败",
-                  variant: "destructive",
-                });
+                toast.error("Failed to draw card");
               })
               .execute();
           } catch (error) {
-            toast({
-              title: "错误",
-              description: error instanceof Error ? error.message : "抽卡失败",
-              variant: "destructive",
-            });
+            toast.error("Failed to draw card");
+          } finally {
+            setDialogState((prev) => ({
+              ...prev,
+              isLoading: false,
+              open: false,
+            }));
+            hideLoading();
+          }
+        } else if (data?.action === "joinGame") {
+          setDialogState((prev) => ({ ...prev, isLoading: true }));
+          try {
+            showLoading("Joining game...");
+            console.log("joinGame", assets.fishCoins, assets.passport);
+            if (!assets.passport) {
+              toast.error("No passport found");
+              return;
+            }
+            const result = await handleJoinGameTransaction()
+              .beforeExecute(async () => {
+                // Recheck balance before executing
+                if (Number(assets.coins) < 100) {
+                  throw new Error("Insufficient balance");
+                }
+                return true;
+              })
+              .onSuccess(async () => {
+                toast.success("Game joined successfully!");
+                await fetchAssets();
+                // TODO: 跳转游戏
+              })
+              .onError((error: any) => {
+                toast.error("Failed to join game");
+              })
+              .execute();
+          } catch (error) {
+            toast.error("Failed to join game");
           } finally {
             setDialogState((prev) => ({
               ...prev,
@@ -438,10 +490,10 @@ export default function Dashboard() {
           }
         } else if (data?.card) {
           // Rental confirmation
-          setAssets((prev) => ({
-            ...prev,
-            coins: prev.coins - data.cost,
-          }));
+          // setAssets((prev) => ({
+          //   ...prev,
+          //   coins: prev.coins - data.cost,
+          // }));
           const rentedCard: RentedCardData = {
             ...data.card,
             usesLeft: data.uses,
@@ -452,10 +504,10 @@ export default function Dashboard() {
           setDialogState((prev) => ({ ...prev, open: false }));
         } else if (data?.id && data.level) {
           // Game join confirmation
-          setAssets((prev) => ({
-            ...prev,
-            coins: prev.coins - data.entryFee,
-          }));
+          // setAssets((prev) => ({
+          //   ...prev,
+          //   coins: prev.coins - data.entryFee,
+          // }));
           router.push(`/game/${data.id}`);
           setDialogState((prev) => ({ ...prev, open: false }));
         }
@@ -476,14 +528,14 @@ export default function Dashboard() {
               stakedAmount: amount,
             };
             setMyStakedCards((prev) => [...prev, stakedCard]);
-            setAssets((prev) => ({
-              ...prev,
-              cards: prev.cards.map((c) =>
-                c.name === data.pool.name.replace(" Pool", "")
-                  ? { ...c, count: c.count - amount }
-                  : c
-              ),
-            }));
+            // setAssets((prev) => ({
+            //   ...prev,
+            //   cards: prev.cards.map((c) =>
+            //     c.name === data.pool.name.replace(" Pool", "")
+            //       ? { ...c, count: c.count - amount }
+            //       : c
+            //   ),
+            // }));
           }
           setDialogState((prev) => ({ ...prev, open: false }));
         }
