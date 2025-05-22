@@ -27,7 +27,6 @@ root.render(
         persistOptions={{ persister }}
       >
         <SuiWeb3ConfigProvider
-          wallets={[Suiet()]}
           networkConfig={networkConfig}
           sns={true}
           autoConnect={true}

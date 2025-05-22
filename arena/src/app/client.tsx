@@ -28,7 +28,7 @@ export const App: React.FC = () => (
         },
         components: {
           Dropdown: {
-            colorBgElevated: 'rgba(76, 175, 80, 0.75)',
+            colorBgElevated: 'rgba(76, 175, 80, 0.8)',
             colorText: 'primary',
             algorithm: true,
           }

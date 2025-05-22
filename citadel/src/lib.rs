@@ -120,7 +120,7 @@ impl AppState {
         let sui_client = SuiClientBuilder::default()
             .build(&network.node_url())
             .await
-            .expect("Sui client build failed");
+            .expect(format!("Sui client build failed with {:?}", network.node_url()).as_str());
         info!("Sui client build success, node url: {:?},graphql url: {:?}, network: {:?}, api version: {:?}", network.node_url(), network.graphql_url(), network, sui_client.api_version());
         // 初始化主密钥和服务器ID
         let master_key = IbeMasterKey::from_byte_array(

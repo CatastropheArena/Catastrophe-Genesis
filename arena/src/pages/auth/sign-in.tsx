@@ -3,9 +3,9 @@ import { Link } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { SessionKey } from "@mysten/seal";
-import PassportConnectButton from "../../components/PassportConnectButton";
 import { Fullscreen } from "@shared/ui/templates";
 import { Loader2, LogIn, Play } from "lucide-react";
+import CustomConnectButton from "src/components/CustomConnectButton";
 
 const TTL_MIN = 10;
 const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || "";
@@ -124,24 +124,22 @@ const SignInWithWallet: React.FC = () => {
     <div className="flex flex-col items-center gap-6">
       {currentAccount ? (
         <>
-          <PassportConnectButton />
-
-          {/* 钱包地址显示 */}
-          <button className="group border-0 border-[#8BC34A] flex items-center justify-center px-6 py-3 rounded-lg bg-gradient-to-r from-[#4CAF50] via-[#8BC34A] to-[#4CAF50] bg-[length:200%_100%] animate-borderGlow text-white font-semibold text-lg uppercase tracking-wider shadow-lg hover:shadow-xl hover:scale-105 hover:brightness-110 transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#8BC34A]/50">
-            {/* 发光边框动画 */}
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-8 h-8 animate-spin" />
-                LOGGING IN...
-              </>
-            ) : (
-              <>
-                START GAME
-                <Play className="ml-4 w-8 h-8 text-white transition-transform group-hover:scale-110" />
-              </>
-            )}
-          </button>
-
+          <CustomConnectButton
+            onButtonClick={handleSessionKeyLogin}
+            customNameComponent={
+              isSubmitting ? (
+                <div className="flex items-center">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                  LOGGING IN...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group">
+                  <span className="font-bold tracking-wider">START GAME</span>
+                  <Play className="w-5 h-5 text-white transition-transform duration-300 group-hover:translate-x-1" strokeWidth={2.5} />
+                </div>
+              )
+            }
+          />
           <div className="w-full border-t border-white/10 pt-4">
             <p className="text-lg uppercase tracking-wider text-white/60 text-center leading-relaxed">
               Click "START GAME" and confirm the signature request in your
@@ -151,7 +149,7 @@ const SignInWithWallet: React.FC = () => {
         </>
       ) : (
         <>
-          <PassportConnectButton />
+          <CustomConnectButton />
           <div className="w-full border-t border-white/10 pt-4">
             <p className="text-lg uppercase tracking-wider text-white/60 text-center leading-relaxed">
               Please connect your wallet to log in to the game
