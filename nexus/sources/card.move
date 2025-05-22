@@ -18,7 +18,7 @@ module nexus::card {
 
     //---------------------------------------------- Consts ----------------------------------------------//
     // coin cost to draw gacha once
-    const DRAW_COST: u64 = 1000;
+    const DRAW_COST: u64 = 500;
     
     // upgrade fragment cost
     const UPGRADE_COST: vector<u64> = vector[7, 15, 30];

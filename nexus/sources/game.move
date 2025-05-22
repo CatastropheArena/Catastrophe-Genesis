@@ -10,7 +10,7 @@ module nexus::game{
     const EIncorrectPaymentAmount: u64 = 0;
     
     //---------------------------------------------- Consts ----------------------------------------------//
-    const GAME_COST: u64 = 500;
+    const GAME_COST: u64 = 100;
 
     //---------------------------------------------- Structs ----------------------------------------------//
     public struct GameEntry has key {
@@ -30,7 +30,7 @@ module nexus::game{
     }
 
     //---------------------------------------------- Entry functions ----------------------------------------------//
-    public fun join_game(
+    public entry fun join_game(
         passport: &Passport,
         treasury: &mut Treasury,
         payment: Coin<FISH>,
@@ -38,7 +38,8 @@ module nexus::game{
         purpose: String,
         clock: &Clock,
         ctx: &mut TxContext,
-    ): GameEntry{
+    ){
+        let sender = tx_context::sender(ctx);
         let user_passport = passport::get_passport_id(passport);
         assert!(coin::value(&payment) == GAME_COST, EIncorrectPaymentAmount);
         treasury::deposit(
@@ -48,11 +49,11 @@ module nexus::game{
             clock,
             ctx
         );
-        GameEntry{
+        transfer::transfer(GameEntry{
             id: object::new(ctx),
             user_passport,
             game_id: game,
             timestamp: clock::timestamp_ms(clock),
-        }
+        }, sender);
     }
 }

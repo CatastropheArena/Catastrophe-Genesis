@@ -11,6 +11,7 @@ module nexus::treasury {
     use nexus::fragment::{Self, FRAGMENT, FragmentStore};
     use nexus::fish::{Self, FISH};
     use nexus::passport::{Self, Passport};
+    use sui::sui::SUI;
 
     //---------------------------------------------- Error Codes ----------------------------------------------//
     const EInsufficientBalance: u64 = 0;
@@ -21,6 +22,7 @@ module nexus::treasury {
     public struct Treasury has key {
         id: UID,
         coin_balance: Balance<FISH>,
+        sui_balance: Balance<SUI>,
         claimed_passports: VecSet<ID>, // 记录已领取初始奖励的护照ID
     }
 
@@ -40,7 +42,7 @@ module nexus::treasury {
 
     /// 资金存入事件
     public struct FundsDeposited has copy, drop {
-        treasury_id: address,
+        coin: String,
         depositor: address,
         amount: u64,
         purpose: String,
@@ -52,6 +54,7 @@ module nexus::treasury {
         let treasury = Treasury {
             id: object::new(ctx),
             coin_balance: balance::zero<FISH>(),
+            sui_balance: balance::zero<SUI>(),
             claimed_passports: vec_set::empty(),
         };
 
@@ -78,7 +81,7 @@ module nexus::treasury {
         balance::join(&mut treasury.coin_balance, coin::into_balance(payment));
 
         event::emit(FundsDeposited {
-            treasury_id: object::uid_to_address(&treasury.id),
+            coin: string::utf8(b"FISH"),
             depositor,
             amount,
             purpose,
@@ -120,8 +123,8 @@ module nexus::treasury {
             purpose: string::utf8(b"Initial rewards distribution - Fragment part")
         });
 
-        // 发放初始 FISH: 100 FISH
-        let fish_amount = 100;
+        // 发放初始 FISH: 500 FISH
+        let fish_amount = 500;
         let fish = coin::from_balance(balance::split(&mut treasury.coin_balance, fish_amount), ctx);
 
         event::emit(RewardsDistributed {
@@ -178,6 +181,26 @@ module nexus::treasury {
     ): Coin<FISH> {
         assert!(balance::value(&treasury.coin_balance) >= amount, EInsufficientBalance);
         coin::from_balance(balance::split(&mut treasury.coin_balance, amount), ctx)
+    }
+
+    public(package) fun deposit_sui(
+        treasury: &mut Treasury,
+        payment: Coin<SUI>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        let amount = coin::value(&payment);
+        let depositor = tx_context::sender(ctx);
+
+        balance::join(&mut treasury.sui_balance, coin::into_balance(payment));
+
+        event::emit(FundsDeposited {
+            coin: string::utf8(b"SUI"),
+            depositor,
+            amount,
+            purpose: string::utf8(b"buy fish"),
+            deposited_at: clock::timestamp_ms(clock)
+        });
     }
 
     //---------------------------------------------- Get functions ----------------------------------------------//
