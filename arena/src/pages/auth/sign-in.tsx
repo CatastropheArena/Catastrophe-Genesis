@@ -1,52 +1,52 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useSnackbar } from "notistack";
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { SessionKey } from "@mysten/seal";
 import PassportConnectButton from "../../components/PassportConnectButton";
 import { Fullscreen } from "@shared/ui/templates";
-import { Loader2,LogIn,Play } from "lucide-react";
+import { Loader2, LogIn, Play } from "lucide-react";
 
 const TTL_MIN = 10;
 const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || "";
 
 export const SignInPage: React.FC = () => (
   <Fullscreen>
-  {/* // 全屏容器 添加透明度*/}
-  <div className="min-h-screen w-full flex items-center justify-center relative dark:bg-slate-900/10 ">
-    {/* 背景渐变 */}
-    <div className="absolute inset-0 dark:bg-[radial-gradient(circle_at_center,rgba(104,58,183,0.05)_0%,rgba(76,175,80,0.15)_45%,rgba(156,39,176,0.25)_100%)] light:bg-[radial-gradient(circle_at_center,rgba(139,195,74,0.35)_0%,rgba(104,58,183,0.45)_45%,rgba(76,175,80,0.55)_100%)] animate-gradient-shift pointer-events-none" />
-    {/* 主面板 */}
-    <div className="w-[90%] max-w-[500px] bg-[rgba(30,35,42,0.8)] dark:bg-[rgba(18,22,28,0.97)] backdrop-blur-2xl rounded-2xl p-9 border border-white/[0.06] shadow-[0_12px_40px_rgba(0,0,0,0.6)] relative overflow-hidden">
-      {/* 标题区域 */}
-      <div className="text-center mb-8">
-        <h1 className="flex items-center justify-center gap-3 text-4xl font-black uppercase tracking-wide text-white font-bungee">
-          <LogIn className="w-12 h-12 fill-[#8BC34A]" />
-          Wallet Login
-        </h1>
-        <h2 className="text-lg font-medium uppercase tracking-wider text-white/70 font-miriam">
-          Connect with your wallet to log in to the Explosion Cat game.
-        </h2>
-      </div>
+    {/* // 全屏容器 添加透明度*/}
+    <div className="min-h-screen w-full flex items-center justify-center relative bg-white/10">
+      {/* 背景渐变 - 优化light模式下的渐变效果 */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,195,74,0.15)_0%,rgba(104,58,183,0.25)_45%,rgba(76,175,80,0.35)_100%)] dark:bg-[radial-gradient(circle_at_center,rgba(104,58,183,0.05)_0%,rgba(76,175,80,0.15)_45%,rgba(156,39,176,0.25)_100%)] animate-gradient-shift pointer-events-none" />
+      {/* 主面板 */}
+      <div className="w-[90%] max-w-[500px] bg-[rgba(30,35,42,0.95)] backdrop-blur-2xl rounded-2xl p-9 border border-white/[0.06] shadow-[0_12px_40px_rgba(0,0,0,0.6)] relative overflow-hidden">
+        {/* 标题区域 */}
+        <div className="text-center mb-8">
+          <h1 className="flex items-center justify-center gap-3 text-4xl font-black uppercase tracking-wide text-white font-bungee">
+            <LogIn className="w-12 h-12 fill-[#8BC34A]" />
+            Wallet Login
+          </h1>
+          <h2 className="text-lg font-medium uppercase tracking-wider text-white/70 font-miriam">
+            Connect with your wallet to log in to the Explosion Cat game.
+          </h2>
+        </div>
 
-      <SignInWithWallet />
+        <SignInWithWallet />
 
-      {/* 底部链接 */}
-      <div className="w-full pt-8 mt-2 border-t border-white/10">
-        <div className="flex items-center justify-center gap-4">
-          <span className="text-lg uppercase tracking-wider text-white/60">
-            No passport?
-          </span>
-          <Link 
-            to="/register"
-            className="text-[#8BC34A] text-lg font-bold uppercase tracking-wider hover:text-[#AED581] hover:underline transition-colors"
-          >
-            Click here to create one.
-          </Link>
+        {/* 底部链接 */}
+        <div className="w-full pt-8 mt-2 border-t border-white/10">
+          <div className="flex items-center justify-center gap-4">
+            <span className="text-lg uppercase tracking-wider text-white/60">
+              No passport?
+            </span>
+            <Link
+              to="/register"
+              className="text-[#8BC34A] text-lg font-bold uppercase tracking-wider hover:text-[#AED581] hover:underline transition-colors"
+            >
+              Click here to create one.
+            </Link>
+          </div>
         </div>
       </div>
     </div>
-  </div>
   </Fullscreen>
 );
 
@@ -58,11 +58,11 @@ const SignInWithWallet: React.FC = () => {
   const handleSessionKeyLogin = async () => {
     try {
       setIsSubmitting(true);
-      
+
       if (!currentAccount?.address) {
-        throw new Error('Wallet address not obtained');
+        throw new Error("Wallet address not obtained");
       }
-      
+
       // Create SessionKey
       const sessionKey = new SessionKey({
         address: currentAccount.address,
@@ -80,7 +80,7 @@ const SignInWithWallet: React.FC = () => {
       //     onSuccess: async (signResult) => {
       //       await sessionKey.setPersonalMessageSignature(signResult.signature);
       //       const certificate = await sessionKey.getCertificate();
-            
+
       //       // Send to server for verification
       //       const authResult = await dispatch(
       //         authModel.actions.sessionKeyAuth({
@@ -91,15 +91,15 @@ const SignInWithWallet: React.FC = () => {
       //           ttlMin: certificate.ttl_min,
       //         })
       //       ).unwrap();
-            
+
       //       // Set user credentials
       //       if (authResult.credentials) {
       //         dispatch(
       //           viewerModel.actions.setCredentials({ credentials: authResult.credentials })
       //         );
-              
+
       //         enqueueSnackbar('Login successful', { variant: 'success' });
-              
+
       //         // If no game entry, redirect to create passport page
       //         if (authResult.hasGameEntry === false) {
       //           navigate('/create-passport');
@@ -113,8 +113,8 @@ const SignInWithWallet: React.FC = () => {
       //   }
       // );
     } catch (error) {
-      console.error('Login failed:', error);
-      enqueueSnackbar('Login failed, please try again', { variant: 'error' });
+      console.error("Login failed:", error);
+      enqueueSnackbar("Login failed, please try again", { variant: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -144,7 +144,8 @@ const SignInWithWallet: React.FC = () => {
 
           <div className="w-full border-t border-white/10 pt-4">
             <p className="text-lg uppercase tracking-wider text-white/60 text-center leading-relaxed">
-              Click "START GAME" and confirm the signature request in your wallet to verify your identity
+              Click "START GAME" and confirm the signature request in your
+              wallet to verify your identity
             </p>
           </div>
         </>
