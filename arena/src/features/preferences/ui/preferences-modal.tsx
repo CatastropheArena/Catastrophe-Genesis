@@ -24,8 +24,8 @@ export const PreferencesModal: React.FC = () => {
   const toggleTheme = () => {
     let updated: Nullable<Theme> = null;
 
-    if (theme === "dark") updated = "light";
-    else if (theme === "light") updated = "dark";
+    if (theme.mode === "dark") updated = "light";
+    else if (theme.mode === "light") updated = "dark";
 
     if (updated) {
       dispatch(themingModel.actions.setTheme(updated));
@@ -56,7 +56,7 @@ export const PreferencesModal: React.FC = () => {
                 <Layout.Row align="center" gap={2}>
                   <Preference>{t("w.theme-mode")}: </Preference>
                   <Value onClick={toggleTheme}>
-                    {theme === "light" ? t("w.light") : t("w.dark")}
+                    {theme.mode === "light" ? t("w.light") : t("w.dark")}
                   </Value>
                 </Layout.Row>
 

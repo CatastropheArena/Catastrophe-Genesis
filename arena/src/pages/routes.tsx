@@ -45,14 +45,6 @@ export const Routes: React.FC = () => (
       }
     />
     <Route
-      path="/register"
-      element={
-        <PublicOnlyRoute>
-          <SignUpPage />
-        </PublicOnlyRoute>
-      }
-    />
-    <Route
       path="/play"
       element={
         <PrivateRoute>
