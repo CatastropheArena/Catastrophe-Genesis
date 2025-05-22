@@ -87,13 +87,13 @@
 
 /* 字体定义 - 路径需要根据实际项目结构调整 */
 @font-face {
-  font-family: "Miriam Libre";
+  font-family: "MiriamLibreRegular";
   font-weight: 400;
   src: url("@shared/assets/fonts/MiriamLibre-Regular.woff2") format("woff2");
 }
 
 @font-face {
-  font-family: "Miriam Libre";
+  font-family: "MiriamLibreBold";
   font-weight: 700;
   src: url("@shared/assets/fonts/MiriamLibre-Bold.woff2") format("woff2");
 }
@@ -117,136 +117,76 @@
   }
 }
 
-
-/* 自定义网络选择按钮 */
+/* 自定义 Passport Connect 按钮样式 */
 .ant-web3-connect-button-chain-select-button {
-  /* 修改按钮背景色 */
-  background-color: #686666; 
-  /* 修改按钮边框 */
-  border: 1px solid #8BC34A !important;
-  /* 修改按钮圆角 */
-  border-radius: 8px !important;
-  /* 添加过渡效果 */
-  transition: all 0.3s ease;
-}
+  /* 布局 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #4CAF50 !important;
+  outline: none !important;
+  /* 渐变背景 */
+  background-image: linear-gradient(
+    to right,
+    #8BC34A,
+    #4CAF50,
+    #4CAF50,
+  );
+  background-size: 200% 100%;
 
-/* 暗色模式下的按钮样式 */
-.dark .ant-web3-connect-button-chain-select-button {
-  /* 暗色模式背景色 */
-  background-color: rgba(30, 35, 42, 0.8);
-  /* 暗色模式边框 */
-  border: 1px solid #8BC34A !important;
-}
+  /* 自定义动画（需在下方定义@keyframes） */
+  animation: borderGlow 3s linear infinite;
 
-/* 鼠标悬停时的样式 */
-.ant-web3-connect-button-chain-select-button:hover {
-  background-color: #79867a;
-  border-color: #4CAF50 !important;
-}
+  /* 文字样式 */
+  color: #fff;
+  font-weight: 600;
+  font-size: 1.125rem; /* text-lg */
+  text-transform: uppercase;
+  letter-spacing: 0.05em; /* tracking-wider */
 
-/* 暗色模式下鼠标悬停时的样式 */
-.dark .ant-web3-connect-button-chain-select-button:hover {
-  background-color: rgba(30, 35, 42, 0.8); /* 保持与非悬停状态相同的背景色 */
-  border-color: #9CCC65 !important;
+  /* 阴影 */
+  box-shadow: 0 10px 15px -3px rgba(76, 175, 80, 0.2), 0 4px 6px -4px rgba(76, 175, 80, 0.1);
+
+  /* 圆角 */
+  border-radius: 0.5rem;
+
+  border: 0px solid #4CAF50;
+  /* 过渡 */
+  transition: 
+    box-shadow 0.3s, 
+    transform 0.3s, 
+    filter 0.3s, 
+    background-position 0.3s;
 }
 
 /* 网络选择下拉菜单 */
 .ant-web3-connect-button-chain-select {
-  /* 修改文字颜色 */
-  color: #4CAF50;
-  /* 修改字体大小 */
-  font-size: 14px;
-  /* 修改内边距 */
-  padding: 4px 8px;
-  /* 添加字体样式 */
-  font-family: 'Miriam Libre', monospace;
-}
+ /* 布局 */
+ display: flex;
+ align-items: center;
+ justify-content: center;
 
-/* 暗色模式下的下拉菜单文字 */
-.dark .ant-web3-connect-button-chain-select {
-  color: #8BC34A;
-}
+ /* 自定义动画（需在下方定义@keyframes） */
+ animation: borderGlow 3s linear infinite;
 
-/* 网络图标样式 */
-.ant-web3-icon-sui-colorful {
-  /* 修改图标大小 */
-  font-size: 18px !important;
-}
+ /* 文字样式 */
+ color: #fff;
+ font-weight: 600;
+ font-size: 1.125rem; /* text-lg */
+ text-transform: uppercase;
+ letter-spacing: 0.05em; /* tracking-wider */
 
-/* 钱包地址样式 - 亮色模式 */
-.wallet-address {
-  font-family: monospace;
-  color: #4CAF50;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
+ /* 阴影 */
+ box-shadow: 0 10px 15px -3px rgba(76, 175, 80, 0.2), 0 4px 6px -4px rgba(76, 175, 80, 0.1);
 
-/* 钱包地址样式 - 暗色模式 */
-.dark .wallet-address {
-  color: #8BC34A;
-}
+ /* 圆角 */
+ border-radius: 0.5rem;
 
-/* 下拉菜单样式 - 在打开网络选择器时生效 */
-.ant-dropdown-menu {
-  /* 菜单背景色 */
-  background-color: #ffffff;
-  /* 菜单圆角 */
-  border-radius: 10px;
-  /* 菜单阴影 */
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16);
-}
-
-/* 暗色模式下拉菜单样式 */
-.dark .ant-dropdown-menu {
-  background-color: #242830;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-}
-
-/* 菜单项样式 */
-.ant-dropdown-menu-item {
-  /* 菜单项文字颜色 */
-  color: #333333;
-  /* 菜单项内边距 */
-  padding: 10px 16px;
-}
-
-/* 暗色模式菜单项样式 */
-.dark .ant-dropdown-menu-item {
-  color: #f20000;
-}
-
-/* 鼠标悬停在菜单项上的样式 */
-.ant-dropdown-menu-item:hover {
-  /* 悬停背景色 */
-  background-color: #f0f9ff;
-}
-
-/* 暗色模式鼠标悬停在菜单项上的样式 */
-.dark .ant-dropdown-menu-item:hover {
-  background-color: #353a45;
-}
-
-/* 钱包容器样式 */
-.wallet-container {
-  position: relative;
-  background-color: #f5f5f5;
-  padding: 0.75rem 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-/* 暗色模式钱包容器 */
-.dark .wallet-container {
-  background-color: rgba(30, 35, 42, 0.8);
-}
-
-/* 暗色模式下钱包容器悬停状态 */
-.dark .wallet-container:hover {
-  background-color: rgba(30, 35, 42, 0.8); /* 保持与非悬停状态相同的背景色 */
-  border-color: #9CCC65 !important;
+ border: 0px solid #4CAF50;
+ /* 过渡 */
+ transition: 
+   box-shadow 0.3s, 
+   transform 0.3s, 
+   filter 0.3s, 
+   background-position 0.3s;
 }

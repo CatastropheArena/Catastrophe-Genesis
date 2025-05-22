@@ -16,11 +16,25 @@ import {GlobalStyles} from "./global-styles";
 import {DesktopOnlyRestrict} from "./desktop-only";
 import { SettingsSidebar } from "./settings-sidebar";
 import { SignInPage } from "@pages/auth/sign-in";
+import { ConfigProvider} from 'antd';
 // import { SignUpPage } from "@pages/auth/sign-up";
 const styles = <GlobalStyles />;
-
 export const App: React.FC = () => (
   <ThemingProvider>
+  <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: '#8BC34A',
+        },
+        components: {
+          Dropdown: {
+            colorBgElevated: 'rgba(76, 175, 80, 0.75)',
+            colorText: 'primary',
+            algorithm: true,
+          }
+        }
+      }}
+      >
     {styles}
     <React.Suspense>
       <NotificationProvider>
@@ -47,5 +61,6 @@ export const App: React.FC = () => (
         </DesktopOnlyRestrict>
       </NotificationProvider>
     </React.Suspense>
+    </ConfigProvider>
   </ThemingProvider>
 );

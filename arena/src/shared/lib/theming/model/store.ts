@@ -9,7 +9,7 @@ export interface ThemingReducer {
 
 export const store = createReducer<ThemingReducer>(
   {
-    theme: (localStorage.getItem("theme") as Theme) || "system",
+    theme: (localStorage.getItem("theme") as Theme) || window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   },
   {
     [actions.setTheme.type]: (
