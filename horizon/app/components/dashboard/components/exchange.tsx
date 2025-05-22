@@ -22,7 +22,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { useBetterSignAndExecuteTransaction } from "@/hooks/useBetterTx";
-import { useUserBalance } from "@/hooks/useUserBalance";
 import { useAssets } from "@/context/AssetsContext";
 import { useLoading } from "@/context/LoadingContext";
 
@@ -48,8 +47,7 @@ const EXCHANGE_RATE = {
 export default function Exchange() {
   const { toast } = useToast();
   const { showLoading, hideLoading } = useLoading();
-  const { balance: suiBalance, refetch: refetchBalance } = useUserBalance();
-  const { fetchAssets } = useAssets();
+  const { assets, fetchAssets } = useAssets();
   const account = useCurrentAccount();
 
   // State for input amount and token selection
@@ -68,9 +66,9 @@ export default function Exchange() {
         const fishAmount = BigInt(parseFloat(amount) * 100);
 
         // If multiple coin objects exist, merge them first
-        if (suiBalance.suiCoins.length > 1) {
-          let baseCoin = suiBalance.suiCoins[0].coinObjectId;
-          let otherCoins = suiBalance.suiCoins
+        if (assets.suiCoins.length > 1) {
+          let baseCoin = assets.suiCoins[0].coinObjectId;
+          let otherCoins = assets.suiCoins
             .slice(1)
             .map((coin) => coin.coinObjectId);
           tx.mergeCoins(baseCoin, otherCoins);
@@ -118,7 +116,7 @@ export default function Exchange() {
     }
 
     const suiAmount = parseFloat(amount);
-    const availableSui = Number(suiBalance.suiBalance) / 1e9;
+    const availableSui = Number(assets.sui) / 1e9;
 
     if (suiAmount > availableSui) {
       toast({
@@ -133,7 +131,6 @@ export default function Exchange() {
       showLoading("Processing swap...");
       await handleSignAndExecuteTransaction()
         .beforeExecute(async () => {
-          await refetchBalance();
           return true;
         })
         .onSuccess(async () => {
@@ -143,7 +140,6 @@ export default function Exchange() {
             variant: "default",
           });
           await fetchAssets();
-          await refetchBalance();
           setAmount("");
         })
         .onError((error: any) => {
@@ -206,7 +202,7 @@ export default function Exchange() {
                 </div>
               </div>
               <div className="text-[10px] text-purple-200/80 px-1 font-light">
-                Balance: {(Number(suiBalance.suiBalance) / 1e9).toFixed(9)}{" "}
+                Balance: {(Number(assets.sui) / 1e9).toFixed(9)}{" "}
                 {TOKENS[fromToken].symbol}
               </div>
 
@@ -246,12 +242,12 @@ export default function Exchange() {
                 disabled={
                   !amount ||
                   Number(amount) <= 0 ||
-                  Number(amount) > Number(suiBalance.suiBalance) / 1e9
+                  Number(amount) > Number(assets.sui) / 1e9
                 }
               >
                 {!amount || Number(amount) <= 0
                   ? "Enter amount"
-                  : Number(amount) > Number(suiBalance.suiBalance) / 1e9
+                  : Number(amount) > Number(assets.sui) / 1e9
                   ? "Insufficient Balance"
                   : "Confirm Swap"}
               </Button>

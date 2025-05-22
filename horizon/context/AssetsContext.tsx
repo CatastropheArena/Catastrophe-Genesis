@@ -2,11 +2,14 @@
 
 import { createContext, useContext, ReactNode } from "react";
 import { useUserAssets } from "@/hooks/useUserAssets";
-
+import { CoinStruct, SuiObjectResponse } from "@mysten/sui/client";
 interface Assets {
   sui: number;
   coins: number;
   fragments: number;
+  suiCoins: CoinStruct[];
+  fishCoins: CoinStruct[];
+  passport: SuiObjectResponse | undefined;
 }
 
 interface AssetsContextType {

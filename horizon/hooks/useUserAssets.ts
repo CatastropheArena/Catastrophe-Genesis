@@ -1,10 +1,17 @@
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { useCallback, useEffect, useState } from "react";
-import { SuiObjectData } from "@mysten/sui/client";
+import {
+  CoinStruct,
+  SuiObjectData,
+  SuiObjectResponse,
+} from "@mysten/sui/client";
 
 interface Assets {
   sui: number;
   coins: number;
+  suiCoins: CoinStruct[];
+  fishCoins: CoinStruct[];
+  passport: SuiObjectResponse | undefined;
   fragments: number;
 }
 
@@ -12,6 +19,9 @@ export function useUserAssets() {
   const [assets, setAssets] = useState<Assets>({
     sui: 0,
     coins: 0,
+    suiCoins: [],
+    fishCoins: [],
+    passport: undefined,
     fragments: 0,
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -25,6 +35,9 @@ export function useUserAssets() {
       setAssets({
         sui: 0,
         coins: 0,
+        suiCoins: [],
+        fishCoins: [],
+        passport: undefined,
         fragments: 0,
       });
       return;
@@ -43,6 +56,31 @@ export function useUserAssets() {
       const sui = await client.getBalance({
         owner: account.address,
         coinType: `0x2::sui::SUI`,
+      });
+
+      // Get all coin objects owned by the user
+      const { data: fishCoins } = await client.getCoins({
+        owner: account.address,
+        coinType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::fish::FISH`,
+      });
+      const { data: suiCoins } = await client.getCoins({
+        owner: account.address,
+        coinType: `0x2::sui::SUI`,
+      });
+
+      // Get passport
+      const passportObjects = await client.getOwnedObjects({
+        owner: account.address,
+        options: {
+          showContent: true,
+        },
+        filter: {
+          MatchAny: [
+            {
+              StructType: `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::passport::Passport`,
+            },
+          ],
+        },
       });
 
       // Initialize fragment total
@@ -96,6 +134,16 @@ export function useUserAssets() {
       const newAssets = {
         sui: Number(sui.totalBalance),
         coins: Number(coins.totalBalance),
+        suiCoins: suiCoins,
+        fishCoins: fishCoins,
+        passport: passportObjects.data.find((i) => {
+          const data = i.data as unknown as SuiObjectData;
+          return data.content?.dataType === "moveObject" &&
+            data.content?.type ===
+              `${process.env.NEXT_PUBLIC_TESTNET_PACKAGE}::passport::Passport`
+            ? (data.content?.fields as unknown as Passport)
+            : null;
+        }),
         fragments: totalFragments,
       };
 

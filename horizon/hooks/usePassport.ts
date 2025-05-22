@@ -144,6 +144,7 @@ export const usePassport = () => {
 
   return {
     hasPassport,
+    passport,
     isCreating: isLoading,
     isChecking,
     error,
