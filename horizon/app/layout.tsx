@@ -3,27 +3,31 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import { Providers } from "@/app/providers";
 import ClientLayout from "@/app/components/layout/ClientLayout";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: "Catastrophe Genesis",
-  description: "Catastrophe Genesis",
-  generator: "Catastrophe Genesis",
-};
-
+export const metadata = {
+  title: "Catastrophe-Genesis - Strategic Card Battle GameFi",
+  description:
+    "A strategic card-based GameFi platform on the Sui Network where players compete, synthesize cards, and earn rewards",
+}
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.className} antialiased`}>
-      <body>
+    <html lang="en" suppressHydrationWarning>
+    <body>
+      <ThemeProvider attribute="class" defaultTheme="purple" enableSystem={false} themes={["purple", "green"]}>
         <Providers>
           <ClientLayout>{children}</ClientLayout>
         </Providers>
-      </body>
-    </html>
+      </ThemeProvider>
+    </body>
+  </html>
+
+
   );
 }

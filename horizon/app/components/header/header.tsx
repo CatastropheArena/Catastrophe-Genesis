@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useContext, useEffect } from "react";
-import { Coins, Sparkles } from "lucide-react";
+import { Coins, Gamepad2, Sparkles } from "lucide-react";
 import { AppContext } from "@/context/AppContext";
 import { ConnectModal } from "@mysten/dapp-kit";
 import ConnectMenu from "@/app/components/ui/connectMenu";
@@ -108,7 +108,7 @@ export const Header = () => {
                 className="h-6 w-6"
               />
               <h1 className="text-base font-bold text-white hidden md:block">
-                Exploding Cats
+                Catastrophe
               </h1>
             </div>
 
@@ -135,17 +135,14 @@ export const Header = () => {
               ) : (
                 <ConnectModal
                   trigger={
-                    <button
-                      className="h-full rounded-[11px] outline-none ring-0 xl:button-animate-105 overflow-hidden p-[1px]"
-                      disabled={!!walletAddress}
-                    >
-                      <div className="h-full px-5 py-4 flex items-center gap-2 rounded-xl bg-white/10">
-                        <span className="text-sm">
-                          {walletAddress ? "Connected" : "Connect Wallet"}
-                        </span>
-                        <LinkIcon size={17} className="text-white" />
-                      </div>
+                    <div className="flex items-center gap-4">
+                      <button
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-full flex items-center gap-2 transition-colors"
+                        disabled={!!walletAddress}
+                        >
+                      {walletAddress ? "Connected" : "Connect Wallet"}
                     </button>
+                  </div>
                   }
                 />
               )}
