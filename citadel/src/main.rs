@@ -90,9 +90,20 @@ async fn start_server() -> Result<()> {
 
     // Define CORS strategy
     let cors = CorsLayer::new()
-        .allow_methods(Any)
-        .allow_headers(Any)
-        .allow_origin(Any);
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS, Method::PUT, Method::DELETE, Method::PATCH, Method::HEAD, Method::TRACE, Method::CONNECT])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            HeaderName::from_static("request-id"),
+            HeaderName::from_static("client-sdk-type"),
+            HeaderName::from_static("client-sdk-version"),
+        ])
+        .allow_origin([
+            "http://127.0.0.1:5173".parse().unwrap(),
+            "http://localhost:5173".parse().unwrap(),
+        ])
+        .allow_credentials(true);
 
     // Configure public routes without authentication
     let public_routes = Router::new()

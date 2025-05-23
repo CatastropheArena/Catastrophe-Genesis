@@ -25,7 +25,7 @@ Catastrophe = { local = "../../../nexus" }
 citadel = "0x0" # 替换为你的发布地址
 std = "0x1"
 sui = "0x2"
-nexus = "0x12bd30b99714b79190cbbf7afb4348d3b2912570769a033bde255c383378890e" # 使用已发布的实际地址
+nexus = "0x1647c0f611b06c9e58fbaa0035c6cafc8e4aeb036fdfed421617751e2bd54d52" # 使用已发布的实际地址
 
 # Named addresses will be accessible in Move as `@name`. They're also exported:
 # for example, `std = "0x1"` is exported by the Standard Library.
