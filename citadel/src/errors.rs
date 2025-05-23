@@ -157,3 +157,15 @@ impl InternalError {
         }
     }
 }
+
+impl From<serde_json::Error> for InternalError {
+    fn from(_: serde_json::Error) -> Self {
+        InternalError::SerializationError
+    }
+}
+
+impl From<tower_sessions::session::Error> for InternalError {
+    fn from(_: tower_sessions::session::Error) -> Self {
+        InternalError::Failure
+    }
+}

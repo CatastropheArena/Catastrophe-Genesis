@@ -33,7 +33,7 @@ axum = { version = "0.7", features = ["macros", "ws"] }
 reqwest = { version = "0.11", features = ["json"] }
 serde_yaml = "0.9.34"
 tower = "0.4.13"
-tower-http = { version = "0.6.0", features = ["cors"] }
+tower-http = { version = "0.6.0", features = ["cors", "trace"] }
 nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", rev = "8ec7eac72bbb2097f1058ee32c13e1ff232f13e8", package="aws-nitro-enclaves-nsm-api", optional = false }
 dashmap = "5.5.3"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
@@ -58,6 +58,10 @@ parking_lot = "0.12.3"
 once_cell = "1.20.2"
 chrono = "0.4.39"
 
+# Session 相关依赖
+tower-sessions = "0.14.0"
+time = "0.3"
+
 # Sui dependencies
 crypto = { git = "https://github.com/MystenLabs/seal", tag = "seal-v0.3.0", package = "crypto" }
 sui_types = { git = "https://github.com/mystenlabs/sui", rev = "1f5fef23d09fb697fff9e83907c5871c08fb6c87", package = "sui-types"}
@@ -69,7 +73,6 @@ sui_move_build = { git = "https://github.com/mystenlabs/sui", rev = "1f5fef23d09
 sui_keys = { git = "https://github.com/mystenlabs/sui", rev = "1f5fef23d09fb697fff9e83907c5871c08fb6c87", package = "sui-keys" }
 jsonwebtoken = "9.3.1"
 itoa = "1.0.15"
-
 
 [dev-dependencies]
 tracing-test = "0.2.5"

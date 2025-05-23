@@ -56,6 +56,7 @@ pub mod types; // 数据类型定义
 pub mod valid_ptb; // 可编程交易块验证 // 测试模块
 pub mod ws; // WebSocket 会话管理模块
 pub mod sdk; // SUI SDK 模块
+pub mod session_login; // 会话登录模块
 
 /// 更新最新检查点时间戳的间隔
 const CHECKPOINT_UPDATE_INTERVAL: Duration = Duration::from_secs(10);

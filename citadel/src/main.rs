@@ -8,22 +8,26 @@ use axum::{
     Router,
 };
 use clap::{Parser, Subcommand};
+use fastcrypto::traits::KeyPair;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, info};
-use std::time::Duration;
 use http::Method;
 use http::header;
 use http::HeaderName;
+use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
+use time::Duration;
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use nautilus_server::app::process_data;
 use nautilus_server::catastrophe::{
-    auth_middleware, generate_avatar, 
-    handle_session_token,
-    handle_encrypted_session_token,
+    generate_avatar, 
     handle_create_profile,
-    handle_get_profile
+    handle_get_profile,
+    handle_get_user_profile
 };
+use nautilus_server::session_login::{handle_session_token, auth_middleware,get_session_credentials};
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
 use nautilus_server::ws::register_ws_routes;
@@ -105,6 +109,12 @@ async fn start_server() -> Result<()> {
         ])
         .allow_credentials(true);
 
+    // 创建 session store
+    let session_store = MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(true)
+        .with_expiry(Expiry::OnInactivity(Duration::days(1))); // 设置为24小时
+
     // Configure public routes without authentication
     let public_routes = Router::new()
         .route("/process_data", post(process_data))
@@ -112,10 +122,11 @@ async fn start_server() -> Result<()> {
         .route("/v1/service", get(handle_get_service))
         .route("/get_attestation", get(get_attestation))
         .route("/auth/session_token", post(handle_session_token))
-        .route("/auth/encrypted_session_token", post(handle_encrypted_session_token))
-        .route("/user/avatar", get(generate_avatar))
-        .route("/test/create_profile", post(handle_create_profile))
-        .route("/test/get_profile", post(handle_get_profile)); 
+        .route("/auth/credentials", get(get_session_credentials))
+        .route("/user/avatar", get(generate_avatar));
+        // .route("/test/create_profile", post(handle_create_profile))
+        // .route("/test/get_profile", post(handle_get_profile))
+        // .route("/user/profile", get(handle_get_user_profile));
 
     // Configure protected routes that require JWT authentication
     let protected_routes = Router::new()
@@ -125,7 +136,7 @@ async fn start_server() -> Result<()> {
             auth_middleware,
         ));
 
-    // Merge routes
+    // Merge routes and add layers in the correct order
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
@@ -133,8 +144,11 @@ async fn start_server() -> Result<()> {
     // Integrate WebSocket routes
     let app = register_ws_routes(app);
     info!("Server started, WebSocket functionality integrated");
-    // integrate cors
-    let app = app.layer(cors);
+    // integrate cors and session
+    let app = app
+        .layer(session_layer) // 添加 session 支持
+        .layer(cors) // 添加 CORS 支持
+        .layer(TraceLayer::new_for_http());
     serve(app).await
 }
 
