@@ -1,14 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useSnackbar } from "notistack";
-import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SessionKey } from "@mysten/seal";
+import { useCurrentAccount, useSignPersonalMessage, useSuiClient } from "@mysten/dapp-kit";
 import { Fullscreen } from "@shared/ui/templates";
 import { Loader2, LogIn, Play } from "lucide-react";
 import CustomConnectButton from "src/components/CustomConnectButton";
-
-const TTL_MIN = 10;
-const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || "";
+import { useNavigate } from "react-router-dom";
+import { useDispatch } from "@app/store";
+import { authModel } from "@features/auth";
+import { viewerModel } from "@entities/viewer";
+import { toBase64 } from "@mysten/bcs";
+import { useNexusObjects } from "src/lib/nexus/usePassport";
+import { SealApproveVerifyNexusPassportMoveCall, prepareSessionToken } from "src/lib/server/sessionToken";
+import { getNetworkVariables } from "src/config/networkConfig";
+import { NETWORK } from "src/config/constants";
+import { useChainStore } from "src/components/chain";
+import { useSessionStore } from 'src/components/session';
+import { Transaction } from "@mysten/sui/transactions";
+import {socket} from "@shared/lib/ws";
+import { User } from "@entities/user";
+import { useAuthStore } from 'src/components/auth';
+import { store } from "@app/store";
 
 export const SignInPage: React.FC = () => (
   <Fullscreen>
@@ -51,71 +63,79 @@ export const SignInPage: React.FC = () => (
 );
 
 const SignInWithWallet: React.FC = () => {
+  const dispatch = useDispatch();
   const { enqueueSnackbar } = useSnackbar();
   const currentAccount = useCurrentAccount();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { mutate: signPersonalMessage } = useSignPersonalMessage();
+  const { objects: objects, loading } = useNexusObjects();
+  const currentChain = useChainStore((state) => state.currentChain);
+  const networkConfig = getNetworkVariables(currentChain?.network || "testnet");
+  const { getValidSession, renewSession } = useSessionStore();
+  const { setToken } = useAuthStore();
+  const suiClient = useSuiClient();
 
   const handleSessionKeyLogin = async () => {
     try {
       setIsSubmitting(true);
-
       if (!currentAccount?.address) {
         throw new Error("Wallet address not obtained");
       }
+      // 检查现有 session
+      let sessionKey = getValidSession();
+      // 如果没有有效 session，创建新的
+      if (!sessionKey) {
+        sessionKey = await renewSession(
+          currentAccount.address,
+          networkConfig?.CitadelPackage || "",
+          signPersonalMessage
+        );
+        if (!sessionKey) {
+          throw new Error("Failed to create session");
+        }
+      }
 
-      // Create SessionKey
-      const sessionKey = new SessionKey({
-        address: currentAccount.address,
-        packageId: PACKAGE_ID,
-        ttlMin: TTL_MIN,
+      // 准备 moveCall
+      const moveCallConstructor = SealApproveVerifyNexusPassportMoveCall(
+        networkConfig?.CitadelPackage || "",
+        objects?.passport?.objectId || "",
+        objects?.gameEntries[0]?.objectId || ""
+      );
+
+      // 获取 session token 数据
+      const sessionTokenRequest = await prepareSessionToken(sessionKey, suiClient, moveCallConstructor);
+
+      dispatch(authModel.actions.sessionKeyAuth(sessionTokenRequest))
+      .unwrap()
+      .then((res) => {
+        console.log(res)
+        // 保存 auth token
+        setToken(res.auth_token);
+        // 将 profile 数据转换为 User 格式
+        const userData: User = {
+          id: res.profile.id,
+          username: currentAccount.address,
+          avatar: res.profile.avatar,
+          rating: res.profile.rating
+        };
+        console.log(userData)
+        dispatch(
+          viewerModel.actions.setCredentials({ credentials: userData })
+        );
+        socket.disconnect();
+        socket.connect();
+      })
+      .catch((error) => {
+        enqueueSnackbar(error, {
+          variant: "error",
+        });
+      })
+      .finally(() => {
+        setIsSubmitting(false);
       });
-      console.log(sessionKey);
-
-      // // Request user signature
-      // signPersonalMessage(
-      //   {
-      //     message: sessionKey.getPersonalMessage(),
-      //   },
-      //   {
-      //     onSuccess: async (signResult) => {
-      //       await sessionKey.setPersonalMessageSignature(signResult.signature);
-      //       const certificate = await sessionKey.getCertificate();
-
-      //       // Send to server for verification
-      //       const authResult = await dispatch(
-      //         authModel.actions.sessionKeyAuth({
-      //           signature: certificate.signature,
-      //           sessionKey: certificate.session_vk,
-      //           address: certificate.user,
-      //           timestamp: certificate.creation_time,
-      //           ttlMin: certificate.ttl_min,
-      //         })
-      //       ).unwrap();
-
-      //       // Set user credentials
-      //       if (authResult.credentials) {
-      //         dispatch(
-      //           viewerModel.actions.setCredentials({ credentials: authResult.credentials })
-      //         );
-
-      //         enqueueSnackbar('Login successful', { variant: 'success' });
-
-      //         // If no game entry, redirect to create passport page
-      //         if (authResult.hasGameEntry === false) {
-      //           navigate('/create-passport');
-      //         } else {
-      //           navigate('/');
-      //         }
-      //       } else {
-      //         throw new Error('No credentials returned from server');
-      //       }
-      //     },
-      //   }
-      // );
     } catch (error) {
-      console.error("Login failed:", error);
-      enqueueSnackbar("Login failed, please try again", { variant: "error" });
-    } finally {
+      console.error("登录失败:", error);
+      enqueueSnackbar("登录失败，请重试", { variant: "error" });
       setIsSubmitting(false);
     }
   };

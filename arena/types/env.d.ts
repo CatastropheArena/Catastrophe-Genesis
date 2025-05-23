@@ -13,4 +13,4 @@ type RpcNode = {
   latency: number;
 };
 
-type Network = "mainnet" | "testnet" | "devnet";
+type Network = "mainnet" | "testnet" | "devnet" | "localnet";

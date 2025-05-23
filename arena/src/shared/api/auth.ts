@@ -7,7 +7,21 @@ export interface GetCredentialsResponse {
   credentials: Credentials;
 }
 
-const getCredentials = (): AxiosPromise<GetCredentialsResponse> =>
+export interface SessionUser {
+  user_address: string;
+  session_vk: string;
+  exp: number;
+  profile: Profile;
+}
+
+/// 获取用户Profile响应结构
+export interface GetUserCredentialsResponse {
+    success: boolean,
+    credentials: SessionUser,
+    error: string,
+}
+
+const getCredentials = (): AxiosPromise<GetUserCredentialsResponse> =>
   request({url: "/auth/credentials"});
 
 export interface SignUpData {
@@ -45,4 +59,60 @@ const verifyUsername = (
 ): AxiosPromise<VerifyUsernameResponse> =>
   request({url: "/auth/verify/username", method: "POST", data});
 
-export const authApi = {getCredentials, signUp, signIn, verifyUsername};
+/// 证书数据结构
+export type Certificate = {
+  user: string;
+  session_vk: string;
+  creation_time: number;
+  ttl_min: number;
+  signature: string;
+};
+/// 会话令牌请求结构
+export interface SessionTokenRequest {
+  ptb: string;
+  enc_key: string;
+  enc_verification_key: string;
+  request_signature: string;
+  certificate: Certificate;
+}
+/// Profile数据结构
+export interface Profile {
+    id: string,
+    avatar: string,
+    rating: number,
+    played: number,
+    won: number,
+    lost: number,
+}
+/// 会话令牌响应结构
+export interface SessionTokenResponse {
+  auth_token: string;
+  expires_at: number;
+  profile: Profile;
+}
+
+
+export interface CheckGameEntryData {
+  address: string;
+}
+
+export interface CheckGameEntryResponse {
+  hasGameEntry: boolean;
+  passportId?: string;
+  }
+
+const checkGameEntry = (data: CheckGameEntryData): AxiosPromise<CheckGameEntryResponse> =>
+  request({url: "/auth/check-game-entry", method: "POST", data});
+
+
+const getSessionToken = (data: SessionTokenRequest): AxiosPromise<SessionTokenResponse> =>
+  request({url: "/auth/session_token", method: "POST", data});
+
+export const authApi = {
+  getCredentials,
+  signUp,
+  signIn,
+  verifyUsername,
+  getSessionToken,
+  checkGameEntry,
+};
