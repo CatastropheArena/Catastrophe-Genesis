@@ -1,26 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useCurrentAccount, useSignPersonalMessage, useSuiClient } from "@mysten/dapp-kit";
 import { Fullscreen } from "@shared/ui/templates";
 import { Loader2, LogIn, Play } from "lucide-react";
 import CustomConnectButton from "src/components/CustomConnectButton";
-import { useNavigate } from "react-router-dom";
 import { useDispatch } from "@app/store";
 import { authModel } from "@features/auth";
 import { viewerModel } from "@entities/viewer";
-import { toBase64 } from "@mysten/bcs";
 import { useNexusObjects } from "src/lib/nexus/usePassport";
 import { SealApproveVerifyNexusPassportMoveCall, prepareSessionToken } from "src/lib/server/sessionToken";
 import { getNetworkVariables } from "src/config/networkConfig";
-import { NETWORK } from "src/config/constants";
 import { useChainStore } from "src/components/chain";
 import { useSessionStore } from 'src/components/session';
-import { Transaction } from "@mysten/sui/transactions";
 import {socket} from "@shared/lib/ws";
 import { User } from "@entities/user";
 import { useAuthStore } from 'src/components/auth';
-import { store } from "@app/store";
 
 export const SignInPage: React.FC = () => (
   <Fullscreen>
@@ -77,7 +72,6 @@ const SignInWithWallet: React.FC = () => {
 
   const handleSessionKeyLogin = async () => {
     try {
-      setIsSubmitting(true);
       if (!currentAccount?.address) {
         throw new Error("Wallet address not obtained");
       }
@@ -104,13 +98,15 @@ const SignInWithWallet: React.FC = () => {
 
       // 获取 session token 数据
       const sessionTokenRequest = await prepareSessionToken(sessionKey, suiClient, moveCallConstructor);
-
+      setIsSubmitting(true);
+      console.log('开始登录流程...');
       dispatch(authModel.actions.sessionKeyAuth(sessionTokenRequest))
       .unwrap()
       .then((res) => {
-        console.log(res)
+        console.log('登录成功，响应数据:', res);
         // 保存 auth token
         setToken(res.auth_token);
+        console.log('Token已保存');
         // 将 profile 数据转换为 User 格式
         const userData: User = {
           id: res.profile.id,
@@ -118,14 +114,17 @@ const SignInWithWallet: React.FC = () => {
           avatar: res.profile.avatar,
           rating: res.profile.rating
         };
-        console.log(userData)
+        console.log('准备设置用户数据:', userData);
         dispatch(
           viewerModel.actions.setCredentials({ credentials: userData })
         );
+        console.log('用户数据已设置');
         socket.disconnect();
         socket.connect();
+        console.log('Socket已重新连接');
       })
       .catch((error) => {
+        console.error('登录失败:', error);
         enqueueSnackbar(error, {
           variant: "error",
         });

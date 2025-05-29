@@ -3,7 +3,6 @@ import axios, {AxiosError} from "axios";
 
 import {
   authApi,
-  CheckGameEntryData,
   GetCredentialsResponse,
   SessionTokenRequest,
   SessionTokenResponse,
@@ -109,9 +108,9 @@ export const setAreCredentialsFetching =
 
 
 // 在 actions.ts 中添加
-export const sessionKeyAuth = createAsyncThunk(
+export const sessionKeyAuth = createAsyncThunk<SessionTokenResponse, SessionTokenRequest>(
   `${prefix}/sessionKeyAuth`,
-  async (data: SessionTokenRequest, { rejectWithValue }) => {
+  async (data, { rejectWithValue }) => {
     try {
       const response = await authApi.getSessionToken(data);
       return response.data;

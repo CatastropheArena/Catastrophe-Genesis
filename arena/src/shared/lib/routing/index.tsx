@@ -10,6 +10,7 @@ interface CustomRouteProps {
 
 export const PrivateRoute: React.FC<CustomRouteProps> = ({children}) => {
   const isAuthenticated = useSelector(authModel.selectors.isAuthenticated);
+  console.log('PrivateRoute: isAuthenticated =', isAuthenticated);
 
   if (isAuthenticated) return <>{children}</>;
 
@@ -18,6 +19,7 @@ export const PrivateRoute: React.FC<CustomRouteProps> = ({children}) => {
 
 export const PublicOnlyRoute: React.FC<CustomRouteProps> = ({children}) => {
   const isAuthenticated = useSelector(authModel.selectors.isAuthenticated);
+  console.log('PublicOnlyRoute: isAuthenticated =', isAuthenticated);
 
   if (!isAuthenticated) return <>{children}</>;
 

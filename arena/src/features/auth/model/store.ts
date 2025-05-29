@@ -25,6 +25,16 @@ export const store = createReducer<AuthState>(
       state.isAuthenticated = true;
     },
 
+    [actions.sessionKeyAuth.fulfilled.type]: (state) => {
+      console.log('sessionKeyAuth fulfilled, setting isAuthenticated to true');
+      state.isAuthenticated = true;
+    },
+
+    [actions.sessionKeyAuth.rejected.type]: (state) => {
+      console.log('sessionKeyAuth rejected, setting isAuthenticated to false');
+      state.isAuthenticated = false;
+    },
+
     [actions.setAreCredentialsFetching.type]: (
       state,
       {payload}: PayloadAction<actions.SetAreCredentialsFetchingPayload>,
