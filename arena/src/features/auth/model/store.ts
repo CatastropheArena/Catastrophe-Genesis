@@ -10,7 +10,7 @@ export interface AuthState {
 export const store = createReducer<AuthState>(
   {
     isAuthenticated: false,
-    areCredentialsFetching: true,
+    areCredentialsFetching: false,
   },
   {
     [actions.fetchCredentials.fulfilled.type]: (state) => {

@@ -27,7 +27,7 @@ use nautilus_server::catastrophe::{
     handle_get_profile,
     handle_get_user_profile
 };
-use nautilus_server::session_login::{handle_session_token, auth_middleware,get_session_credentials};
+use nautilus_server::session_login::{handle_session_token, handler_session_logout, auth_middleware,get_session_credentials};
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
 use nautilus_server::ws::register_ws_routes;
@@ -122,6 +122,7 @@ async fn start_server() -> Result<()> {
         .route("/v1/service", get(handle_get_service))
         .route("/get_attestation", get(get_attestation))
         .route("/auth/session_token", post(handle_session_token))
+        .route("/auth/session_logout", post(handler_session_logout))
         .route("/auth/credentials", get(get_session_credentials))
         .route("/user/avatar", get(generate_avatar));
         // .route("/test/create_profile", post(handle_create_profile))

@@ -5,6 +5,7 @@ import {useDispatch} from "@app/store";
 import {viewerModel} from "@entities/viewer";
 
 import {model} from "../model";
+import { useAuthStore } from "src/components/auth";
 
 export interface CredentialsObtainerProps {
   children: React.ReactNode;
@@ -16,13 +17,12 @@ export const CredentialsObtainer: React.FC<CredentialsObtainerProps> = ({
   const dispatch = useDispatch();
 
   const credentials = viewerModel.useCredentials();
-
+  const token = useAuthStore((state) => state.token);
   const isFetching = useSelector(model.selectors.areCredentialsFetching);
 
   React.useEffect(() => {
-    if (!credentials) {
+    if (token && !credentials) {
       dispatch(model.actions.setAreCredentialsFetching({areFetching: true}));
-
       dispatch(model.actions.fetchCredentials())
         .unwrap()
         .then((res) => {
@@ -36,7 +36,7 @@ export const CredentialsObtainer: React.FC<CredentialsObtainerProps> = ({
           );
         });
     }
-  }, []);
+  }, [token, credentials]);
 
   if (isFetching) return null;
 

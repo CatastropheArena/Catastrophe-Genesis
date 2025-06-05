@@ -108,10 +108,20 @@ const checkGameEntry = (data: CheckGameEntryData): AxiosPromise<CheckGameEntryRe
 const getSessionToken = (data: SessionTokenRequest): AxiosPromise<SessionTokenResponse> =>
   request({url: "/auth/session_token", method: "POST", data});
 
+export interface LogoutResponse {
+  success: boolean;
+  message: string;
+}
+
+const signOut = (): Promise<LogoutResponse> =>
+  request({ url: "/auth/session_logout", method: "POST", withCredentials: true }).then(res => res.data);
+
+
 export const authApi = {
   getCredentials,
   signUp,
   signIn,
+  signOut,
   verifyUsername,
   getSessionToken,
   checkGameEntry,

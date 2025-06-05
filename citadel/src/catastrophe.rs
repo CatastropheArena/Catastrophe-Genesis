@@ -313,35 +313,3 @@ pub async fn handle_get_user_profile(
         }
     }
 }
-
-/**
- * 从 session 中获取当前登录用户
- * 
- * 在被 session 中间件保护的路由中使用
- */
-#[axum::debug_handler]
-pub async fn get_session_credentials(
-    State(app_state): State<Arc<AppState>>,
-    Extension(session): Extension<Session>,
-) -> Result<Json<GetUserProfileResponse>, InternalError> {
-    info!("收到获取用户Profile请求");
-    app_state.metrics.observe_request("get_user_profile");
-
-    // 从 session 中获取用户信息
-    let user = session.get::<SessionUser>(SESSION_USER_KEY).await?
-        .ok_or(InternalError::Unauthorized)?;
-
-    if user.profile.is_none() {
-        return Ok(Json(GetUserProfileResponse {
-            success: false,
-            profile: None,
-            error: Some("用户档案为空".to_string()),
-        }));
-    }else{
-        Ok(Json(GetUserProfileResponse {
-            success: true,
-            profile: user.profile,
-            error: None,
-        }))
-    }
-} 

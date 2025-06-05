@@ -13,6 +13,16 @@ import {Avatar, Button, H3} from "@shared/ui/atoms";
 import {CommonTemplate} from "@shared/ui/templates";
 import {Layout} from "@shared/lib/layout";
 
+// 格式化用户名，过长则显示为 0x1234..1234
+function formatUsername(username: string): string {
+  // 判断是否是以 0x 开头且长度大于 12（0x+4+..+4）
+  if (username.startsWith("0x") && username.length > 12) {
+    return `${username.slice(0, 6)}..${username.slice(-4)}`;
+  }
+  // 其他情况直接返回
+  return username;
+}
+
 export const HomePage: React.FC = () => {
   const {t} = useTranslation("home");
 
@@ -54,7 +64,7 @@ export const HomePage: React.FC = () => {
           <Profile gap={2}>
             <Avatar size={7} src={credentials.avatar} />
 
-            <H3>{credentials.username}</H3>
+            <H3>{formatUsername(credentials.username)}</H3>
 
             {stats.data && <UserStats stats={stats.data} />}
           </Profile>

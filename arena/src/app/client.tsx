@@ -15,9 +15,7 @@ import {NotificationProvider} from "@shared/lib/notification";
 import {GlobalStyles} from "./global-styles";
 import {DesktopOnlyRestrict} from "./desktop-only";
 import { SettingsSidebar } from "./settings-sidebar";
-import { SignInPage } from "@pages/auth/sign-in";
 import { ConfigProvider} from 'antd';
-// import { SignUpPage } from "@pages/auth/sign-up";
 const styles = <GlobalStyles />;
 export const App: React.FC = () => (
   <ThemingProvider>

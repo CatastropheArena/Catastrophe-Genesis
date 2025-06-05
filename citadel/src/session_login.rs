@@ -536,4 +536,27 @@ pub async fn get_session_credentials(
             error: None,
         }))
     }
+}
+
+/// 退出登录响应结构
+#[derive(Debug, Serialize)]
+pub struct LogoutResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// 退出登录接口
+#[axum::debug_handler]
+pub async fn handler_session_logout(
+    Extension(session): Extension<Session>,
+) -> Result<Json<LogoutResponse>, InternalError> {
+    // 移除 session 中的用户信息
+    let _ = session.remove::<serde_json::Value>(SESSION_USER_KEY).await.map_err(|e| {
+        error!("移除 session 中的用户信息失败: {:?}", e);
+        InternalError::Unauthorized
+    })?;
+    Ok(Json(LogoutResponse {
+        success: true,
+        message: "退出登录成功".to_string(),
+    }))
 } 
