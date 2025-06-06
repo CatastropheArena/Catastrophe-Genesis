@@ -10,12 +10,6 @@ import {
   OngoingMatch,
 } from "./common";
 
-export interface GetMeResponse {
-  user: User;
-}
-
-const getMe = (): AxiosPromise<GetMeResponse> => request({url: "/profile/me"});
-
 export interface GetMyMatchesResponse {
   matches: Match[];
 }
@@ -91,7 +85,6 @@ const getMyOngoingMatch = (): AxiosPromise<GetMyOngoingMatchResponse> =>
   request({url: "/profile/me/matches/ongoing", method: "GET"});
 
 export const profileApi = {
-  getMe,
   getMyMatches,
   getMyFriends,
   getMyStats,

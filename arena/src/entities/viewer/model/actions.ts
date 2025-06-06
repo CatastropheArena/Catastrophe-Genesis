@@ -1,9 +1,9 @@
 import {createAction, createAsyncThunk} from "@reduxjs/toolkit";
 
-import {Credentials, User} from "@shared/api/common";
+import {Credentials, Profile, User} from "@shared/api/common";
 
 import {
-  GetMeResponse,
+  GetUserResponse,
   GetMyFriendsResponse,
   GetMyMatchesResponse,
   GetMyOngoingMatchData,
@@ -11,19 +11,30 @@ import {
   GetMyStatsResponse,
   profileApi,
 } from "@shared/api/profile";
+import { authApi } from "@shared/api/auth";
 
 const prefix = "viewer";
 
-export type FetchProfilePayload = GetMeResponse;
-export type FetchProfileOptions = void;
+export type FetchProfilePayload = GetUserResponse;
 
 export const fetchProfile = createAsyncThunk<
   FetchProfilePayload,
-  FetchProfileOptions
->(`${prefix}/fetchProfile`, async () => {
-  const {data} = await profileApi.getMe();
-
-  return data;
+  void
+>(`${prefix}/fetchProfile`, async (_, { rejectWithValue }) => {
+  const { data } = await authApi.authCredentials();
+  if (data.success) {
+    return {
+      user: {
+        id: data.credentials.profile.id,
+        username: data.credentials.profile.id,
+        avatar: data.credentials.profile.avatar,
+        rating: data.credentials.profile.rating,
+        relationship: 0,
+      } as Profile,
+    };
+  } else {
+    return rejectWithValue(data.error);
+  }
 });
 
 export type FetchMatchesPayload = GetMyMatchesResponse;
