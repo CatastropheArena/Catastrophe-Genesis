@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
-import { Cat, PawPrint, UserX, LogOut } from "lucide-react";
+import { Cat, PawPrint, UserX, LogOut, Copy } from "lucide-react";
 import { Button, Menu, MenuItem, IconButton } from "@mui/material";
 import { useDispatch } from "@app/store";
 import { useAuthStore } from 'src/components/auth';
@@ -43,6 +43,15 @@ export const SocialSidebar: React.FC = () => {
   const handleMenuClose = () => {
     setAnchorEl(null);
   };
+
+  // 添加复制ID的处理函数
+  const handleCopyId = useCallback(() => {
+    if (credentials?.id) {
+      navigator.clipboard.writeText(credentials.id);
+      enqueueSnackbar("用户ID已复制到剪贴板", { variant: "success" });
+      handleMenuClose();
+    }
+  }, [credentials?.id, enqueueSnackbar]);
 
   // 如果未登录，不渲染任何内容
   if (!credentials) {
@@ -131,6 +140,25 @@ export const SocialSidebar: React.FC = () => {
             },
           }}
         >
+          <MenuItem
+            onClick={handleCopyId}
+            sx={{
+              borderRadius: 2,
+              mx: 0.5,
+              my: 0.5,
+              color: 'inherit',
+              fontWeight: 700,
+              fontFamily: 'Bungee, sans-serif',
+              letterSpacing: 1.5,
+              transition: 'background 0.2s',
+              '&:hover': {
+                bgcolor: '#8BC34A',
+                color: '#222',
+              },
+            }}
+          >
+            <Copy style={{ marginRight: 8 }} /> Copy ID
+          </MenuItem>
           <MenuItem
             onClick={handleLogout}
             sx={{
