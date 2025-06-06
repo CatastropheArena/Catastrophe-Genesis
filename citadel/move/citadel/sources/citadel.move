@@ -4,6 +4,7 @@ module citadel::citadel {
     use sui::table::{Self, Table};
     use sui::clock::{Self, Clock};
     use sui::event;
+    use sui::address;
     use std::string::{Self, String};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
@@ -94,10 +95,15 @@ module citadel::citadel {
         lost: u64,
     }
 
+    /// 好友关系键 - 用于唯一标识一个好友关系
+    public struct FriendshipKey has copy, drop, store {
+        a: address,
+        b: address,
+    }
+
     /// 用户好友关系
     public struct FriendRelation has store {
-        user_id: address,
-        friend_id: address,
+        from_a: bool,
         status: u8, // 1=待确认, 2=已接受
         created_at: u64,
     }
@@ -105,10 +111,24 @@ module citadel::citadel {
     /// 好友关系存储
     public struct FriendshipStore has key {
         id: UID,
-        // 外层table key是用户ID，内层table key是好友ID
-        relations: Table<address, Table<address, FriendRelation>>,
+        // 使用组合键存储好友关系
+        relations: Table<FriendshipKey, FriendRelation>,
     }
-    
+
+    /// 创建好友关系键 - 确保较小的地址始终在前
+    fun create_friendship_key(addr1: address, addr2: address): FriendshipKey {
+        if (addr1.to_u256() < addr2.to_u256()) {
+            FriendshipKey { a: addr1, b: addr2 }
+        } else {
+            FriendshipKey { a: addr2, b: addr1 }
+        }
+    }
+
+    /// 检查地址是否为好友关系中的参与者
+    public fun is_friendship_participant(key: &FriendshipKey, addr: address): bool {
+        key.a == addr || key.b == addr
+    }
+
     // ============= 卡牌相关数据结构 =============
     
     /// 卡牌类型枚举 (对应前端的CardName)
@@ -396,7 +416,7 @@ module citadel::citadel {
     /// 内部函数：创建Profile
     fun create_profile_internal(
         manager: &mut ManagerStore,
-        friendship: &mut FriendshipStore,
+        _: &mut FriendshipStore,
         passport_id: address,
         avatar: String,
         ctx: &mut TxContext
@@ -418,9 +438,6 @@ module citadel::citadel {
         
         // 更新管理器
         table::add(&mut manager.profiles, passport_id, profile_id);        
-        // 初始化好友关系存储
-        table::add(&mut friendship.relations, profile_id, table::new<address, FriendRelation>(ctx));
-        
         // 发送注册事件
         let sender = tx_context::sender(ctx);
         event::emit(ProfileRegistered {
@@ -462,29 +479,19 @@ module citadel::citadel {
         let to_id = to.id.to_address();
         let now = clock::timestamp_ms(clock);
         
-        let sender_relations = table::borrow_mut(&mut friendship_store.relations, from_id);
+        // 创建好友关系键
+        let key = create_friendship_key(from_id, to_id);
+        
         // 检查是否已存在好友关系
-        assert!(!table::contains(sender_relations, to_id), EInvalidAction);
+        assert!(!table::contains(&friendship_store.relations, key), EInvalidAction);
         
-        // 创建发送者到接收者的关系
-        let sender_relation = FriendRelation {
-            user_id: from_id,
-            friend_id: to_id,
+        // 创建好友关系
+        let relation = FriendRelation {
+            from_a: key.a == from_id, // 判断发起者是否是a地址
             status: FRIEND_REQUEST_PENDING,
             created_at: now,
         };
-        table::add(sender_relations, to_id, sender_relation);
-        
-        let receiver_relations = table::borrow_mut(&mut friendship_store.relations, to_id);
-        
-        // 创建接收者到发送者的关系
-        let receiver_relation = FriendRelation {
-            user_id: to_id,
-            friend_id: from_id,
-            status: FRIEND_REQUEST_PENDING,
-            created_at: now,
-        };
-        table::add(receiver_relations, from_id, receiver_relation);
+        table::add(&mut friendship_store.relations, key, relation);
         
         // 发送事件
         event::emit(FriendRequestSent {
@@ -503,33 +510,30 @@ module citadel::citadel {
     ) {
         let receiver_id = receiver.id.to_address();
         let requester_id = requester.id.to_address();
-        let now = clock::timestamp_ms(clock);
         
-        // 获取并验证接收者的好友关系
-        assert!(table::contains(&friendship_store.relations, receiver_id), EInvalidProfile);
-        let receiver_relations = table::borrow_mut(&mut friendship_store.relations, receiver_id);
-        assert!(table::contains(receiver_relations, requester_id), EInvalidAction);
+        // 创建好友关系键
+        let key = create_friendship_key(requester_id, receiver_id);
         
-        // 更新接收者的关系状态
-        let receiver_relation = table::borrow_mut(receiver_relations, requester_id);
-        assert!(receiver_relation.status == FRIEND_REQUEST_PENDING, EInvalidAction);
-        receiver_relation.status = FRIEND_REQUEST_ACCEPTED;
+        // 获取并验证好友关系
+        assert!(table::contains(&friendship_store.relations, key), EInvalidAction);
+        let relation = table::borrow_mut(&mut friendship_store.relations, key);
+        assert!(relation.status == FRIEND_REQUEST_PENDING, EInvalidAction);
         
-        // 获取并验证请求者的好友关系
-        assert!(table::contains(&friendship_store.relations, requester_id), EInvalidProfile);
-        let requester_relations = table::borrow_mut(&mut friendship_store.relations, requester_id);
-        assert!(table::contains(requester_relations, receiver_id), EInvalidAction);
+        // 验证接受请求的人确实是接收者
+        let is_receiver_a = key.a == receiver_id;
+        assert!(
+            (is_receiver_a && !relation.from_a) || (!is_receiver_a && relation.from_a),
+            EInvalidAction
+        );
         
-        // 更新请求者的关系状态
-        let requester_relation = table::borrow_mut(requester_relations, receiver_id);
-        assert!(requester_relation.status == FRIEND_REQUEST_PENDING, EInvalidAction);
-        requester_relation.status = FRIEND_REQUEST_ACCEPTED;
+        // 更新关系状态
+        relation.status = FRIEND_REQUEST_ACCEPTED;
         
         // 发送事件
         event::emit(FriendRequestAccepted {
             from_user: requester_id,
             to_user: receiver_id,
-            timestamp: now,
+            timestamp: clock::timestamp_ms(clock),
         });
     }
 
@@ -541,16 +545,15 @@ module citadel::citadel {
     ): u8 {
         let from_id = from.id.to_address();
         let to_id = to.id.to_address();
-        if (!table::contains(&friendship_store.relations, from_id)) {
+        
+        // 创建好友关系键
+        let key = create_friendship_key(from_id, to_id);
+        
+        if (!table::contains(&friendship_store.relations, key)) {
             return 0
         };
         
-        let user_relations = table::borrow(&friendship_store.relations, from_id);
-        if (!table::contains(user_relations, to_id)) {
-            return 0
-        };
-        
-        let relation = table::borrow(user_relations, to_id);
+        let relation = table::borrow(&friendship_store.relations, key);
         relation.status
     }
 

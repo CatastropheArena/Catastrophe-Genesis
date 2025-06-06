@@ -24,8 +24,8 @@ pub enum RelationshipStatus {
 /// 好友关系数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Relationship {
-    pub user_id: ObjectID,
-    pub friend_id: ObjectID,
+    pub initiator: ObjectID,
+    pub receiver: ObjectID,
     pub status: RelationshipStatus,
     pub created_at: u64,
 }
@@ -316,8 +316,8 @@ impl GameManager {
         // 查询链上数据
         if let Some(result) = query_relationship(&self.network, &self.friendship_table_id, self_id, other_id).await? {
             let relationship = Relationship {
-                user_id: result.user_id,
-                friend_id: result.friend_id,
+                initiator: result.initiator,
+                receiver: result.receiver,
                 status: match result.status {
                     1 => RelationshipStatus::Pending,
                     2 => RelationshipStatus::Friends,

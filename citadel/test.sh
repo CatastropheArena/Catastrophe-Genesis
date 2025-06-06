@@ -168,16 +168,16 @@ value:
 curl -X POST http://localhost:3000/test/send_friend_request \
   -H "Content-Type: application/json" \
   -d '{
-    "from_profile_id": "0x06c2fd8c3b9651a153c57edbb6cb65a6bfc470d6f1b2ebc4dc0038c7072584ee",
-    "to_profile_id": "0x534f2df12da611b7d04ecabf3b3ad788f9aec9771a4743537b4583ee1538773f"
+    "from_profile_id": "0x5c2dde9ea97e90a09d8946e1b7409ffbf10091840dcc2b8fcb553097e54e9716",
+    "to_profile_id": "0xb8756be451dd3c9d43ec46ee154dad5b2883af3804103dfa41893d33dbd1dd9d"
   }'
 
 
   curl -X POST http://localhost:3000/test/get_relationship \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": "0x06c2fd8c3b9651a153c57edbb6cb65a6bfc470d6f1b2ebc4dc0038c7072584ee",
-    "profile_id": "0x534f2df12da611b7d04ecabf3b3ad788f9aec9771a4743537b4583ee1538773f"
+    "user_id": "0x5c2dde9ea97e90a09d8946e1b7409ffbf10091840dcc2b8fcb553097e54e9716",
+    "profile_id": "0xb8756be451dd3c9d43ec46ee154dad5b2883af3804103dfa41893d33dbd1dd9d"
   }'
 
 ```gql
