@@ -1,101 +1,17 @@
-import {createAction, createAsyncThunk} from "@reduxjs/toolkit";
-import axios, {AxiosError} from "axios";
+import { createAction, createAsyncThunk } from "@reduxjs/toolkit";
+import axios, { AxiosError } from "axios";
 
 import {
   authApi,
-  GetCredentialsResponse,
+  FetchCredentialsResponse,
+  LogoutResponse,
   SessionTokenRequest,
   SessionTokenResponse,
-  SignInData,
-  SignInResponse,
-  SignUpData,
-  SignUpResponse,
-  VerifyUsernameData,
-  VerifyUsernameResponse,
 } from "@shared/api/auth";
-import {HTTPD} from "@shared/lib/request";
+import { HTTPD } from "@shared/lib/request";
 import { Credentials } from "@shared/api/common";
 
 const prefix = "auth";
-
-export type FetchCredentialsPayload = GetCredentialsResponse;
-
-export const fetchCredentials = createAsyncThunk<FetchCredentialsPayload, void>(
-  `${prefix}/fetchCredentials`,
-  async (_, {rejectWithValue}) => {
-    const {data} = await authApi.getCredentials();
-    if (data.success) {
-      return {
-        credentials: {
-          id: data.credentials.profile.id,
-          username: data.credentials.profile.id,
-          avatar: data.credentials.profile.avatar,
-          rating: data.credentials.profile.rating,
-        } as Credentials,
-      };
-    }else{
-      return rejectWithValue(data.error);
-    }
-  },
-);
-
-export type SignUpPayload = SignUpResponse;
-export type SignUpOptions = SignUpData;
-
-export const signUp = createAsyncThunk<SignUpPayload, SignUpOptions>(
-  `${prefix}/signUp`,
-  async (options, {rejectWithValue}) => {
-    try {
-      const {data} = await authApi.signUp(options);
-
-      return data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const value = (error as AxiosError<HTTPD>).response!.data
-          .message[0] as string;
-
-        return rejectWithValue(value);
-      }
-
-      return rejectWithValue(null);
-    }
-  },
-);
-
-export type SignInPayload = SignInResponse;
-export type SignInOptions = SignInData;
-
-export const signIn = createAsyncThunk<SignInPayload, SignInOptions>(
-  `${prefix}/signIn`,
-  async (options, {rejectWithValue}) => {
-    try {
-      const {data} = await authApi.signIn(options);
-
-      return data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const value = (error as AxiosError<HTTPD>).response!.data
-          .message as string;
-
-        return rejectWithValue(value);
-      }
-
-      return rejectWithValue(null);
-    }
-  },
-);
-
-export type VerifyUsernamePayload = VerifyUsernameResponse;
-export type VerifyUsernameOptions = VerifyUsernameData;
-
-export const verifyUsername = createAsyncThunk<
-  VerifyUsernamePayload,
-  VerifyUsernameOptions
->(`${prefix}/verifyUsername`, async (options) => {
-  const {data} = await authApi.verifyUsername(options);
-
-  return data;
-});
 
 export interface SetAreCredentialsFetchingPayload {
   areFetching: boolean;
@@ -103,24 +19,58 @@ export interface SetAreCredentialsFetchingPayload {
 
 export const setAreCredentialsFetching =
   createAction<SetAreCredentialsFetchingPayload>(
-    `${prefix}/setAreCredentialsFetching`,
+    `${prefix}/setAreCredentialsFetching`
   );
 
+export const fetchCredentials = createAsyncThunk<
+  FetchCredentialsResponse,
+  void
+>(`${prefix}/fetchCredentials`, async (_, { rejectWithValue }) => {
+  const { data } = await authApi.authCredentials();
+  if (data.success) {
+    return {
+      credentials: {
+        id: data.credentials.profile.id,
+        username: data.credentials.profile.id,
+        avatar: data.credentials.profile.avatar,
+        rating: data.credentials.profile.rating,
+      } as Credentials,
+    };
+  } else {
+    return rejectWithValue(data.error);
+  }
+});
 
-// 在 actions.ts 中添加
-export const sessionKeyAuth = createAsyncThunk<SessionTokenResponse, SessionTokenRequest>(
-  `${prefix}/sessionKeyAuth`,
-  async (data, { rejectWithValue }) => {
+export const signIn = createAsyncThunk<
+  SessionTokenResponse,
+  SessionTokenRequest
+>(`${prefix}/signIn`, async (data, { rejectWithValue }) => {
+  try {
+    const response = await authApi.authSessionToken(data);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const value = (error as AxiosError<HTTPD>).response!.data
+        .message as string;
+      return rejectWithValue(value);
+    }
+    return rejectWithValue("登录认证失败");
+  }
+});
+
+export const signOut = createAsyncThunk<LogoutResponse, void>(
+  `${prefix}/signOut`,
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await authApi.getSessionToken(data);
-      return response.data;
+      const response = await authApi.authSessionLogout();
+      return response;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const value = (error as AxiosError<HTTPD>).response!.data
           .message as string;
         return rejectWithValue(value);
       }
-      return rejectWithValue("钱包认证失败");
+      return rejectWithValue("退出登录失败");
     }
   }
 );

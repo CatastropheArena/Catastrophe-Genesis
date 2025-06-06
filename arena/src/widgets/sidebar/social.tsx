@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import { Cat, PawPrint, UserX, LogOut } from "lucide-react";
@@ -10,8 +10,10 @@ import { Nullable } from "@shared/lib/typings";
 import { viewerModel } from "@entities/viewer";
 import { userModel } from "@entities/user";
 import { Avatar } from "@shared/ui/atoms";
-import { UserWithInterim } from "@shared/api/common";
+import { User, UserWithInterim } from "@shared/api/common";
 import { authApi } from "@shared/api/auth";
+import { authModel } from "@features/auth";
+import { useSnackbar } from "notistack";
 
 export const SocialSidebar: React.FC = () => {
   const credentials = viewerModel.useCredentials();
@@ -27,6 +29,7 @@ export const SocialSidebar: React.FC = () => {
   const dispatch = useDispatch();
   const { setToken } = useAuthStore();
   const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
 
   // 控制菜单开关的状态
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -41,19 +44,61 @@ export const SocialSidebar: React.FC = () => {
     setAnchorEl(null);
   };
 
-  // 退出登录逻辑
-  const handleLogout = async () => {
+  // 如果未登录，不渲染任何内容
+  if (!credentials) {
+    return null;
+  }
+
+  // 使用 useCallback 优化退出登录函数
+  const handleLogout = useCallback(async () => {
     try {
-      await authApi.signOut(); // 调用后端接口，清除 session
-    } catch (e) {
-      // 可以忽略错误，保证本地也能退出
+      // 1. 先关闭菜单，避免UI状态影响后续操作
+      handleMenuClose();
+
+      // 2. 先断开 socket 连接
+      socket.disconnect();
+
+      // 3. 调用后端登出接口并更新认证状态
+      const response = await dispatch(authModel.actions.signOut()).unwrap();
+      
+      if (!response.success) {
+        throw new Error(response.message || "退出登录失败");
+      }
+
+      // 4. 清除用户数据（创建一个空的用户对象，保持类型一致性）
+      const emptyUser: User = {
+        id: "",
+        username: "",
+        avatar: "",
+        rating: 0
+      };
+      dispatch(viewerModel.actions.setCredentials({ credentials: emptyUser }));
+
+      // 5. 最后清除 token
+      setToken("");
+
+      // 6. 跳转到登录页面（使用 replace 避免返回）
+      navigate("/sign-in", { replace: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+      // 显示错误提示
+      enqueueSnackbar(error instanceof Error ? error.message : "退出登录失败", {
+        variant: "error",
+      });
+      // 即使报错也要确保用户能退出
+      socket.disconnect();
+      dispatch(viewerModel.actions.setCredentials({ 
+        credentials: {
+          id: "",
+          username: "",
+          avatar: "",
+          rating: 0
+        } 
+      }));
+      setToken("");
+      navigate("/sign-in", { replace: true });
     }
-    setToken("");
-    dispatch(viewerModel.actions.setCredentials({ credentials: null as Nullable<any> }));
-    socket.disconnect();
-    navigate("/sign-in");
-    handleMenuClose();
-  };
+  }, [dispatch, setToken, navigate, enqueueSnackbar]);
 
   return (
     <aside className="fixed right-0 top-0 bottom-0 w-44 h-screen bg-white/90 dark:bg-[rgba(30,35,42,0.95)] border-l border-gray-200 dark:border-white/10 shadow-2xl flex flex-col items-center py-8 z-40">

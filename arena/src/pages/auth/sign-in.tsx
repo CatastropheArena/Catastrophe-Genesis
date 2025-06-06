@@ -100,7 +100,7 @@ const SignInWithWallet: React.FC = () => {
       const sessionTokenRequest = await prepareSessionToken(sessionKey, suiClient, moveCallConstructor);
       setIsSubmitting(true);
       console.log('开始登录流程...');
-      dispatch(authModel.actions.sessionKeyAuth(sessionTokenRequest))
+      dispatch(authModel.actions.signIn(sessionTokenRequest))
       .unwrap()
       .then((res) => {
         console.log('登录成功，响应数据:', res);
