@@ -163,3 +163,70 @@ value:
   }
 }
 ```
+
+
+curl -X POST http://localhost:3000/test/send_friend_request \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from_profile_id": "0x06c2fd8c3b9651a153c57edbb6cb65a6bfc470d6f1b2ebc4dc0038c7072584ee",
+    "to_profile_id": "0x534f2df12da611b7d04ecabf3b3ad788f9aec9771a4743537b4583ee1538773f"
+  }'
+
+
+  curl -X POST http://localhost:3000/test/get_relationship \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "0x06c2fd8c3b9651a153c57edbb6cb65a6bfc470d6f1b2ebc4dc0038c7072584ee",
+    "profile_id": "0x534f2df12da611b7d04ecabf3b3ad788f9aec9771a4743537b4583ee1538773f"
+  }'
+
+```gql
+  query GetFriendshipStore {
+  owner(address: "0xc5c048363599dd926614e688ab1901ee789b2afeb6ca8c1a8fd85f0662a1220b") {
+    address
+    dynamicFields {
+      nodes {
+        name { json }
+        value {
+          ... on MoveValue {
+            json
+          }
+          ... on MoveObject {
+            contents {
+              json
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+value:
+```gql
+{
+  "data": {
+    "owner": {
+      "address": "0xc5c048363599dd926614e688ab1901ee789b2afeb6ca8c1a8fd85f0662a1220b",
+      "dynamicFields": {
+        "nodes": [
+          {
+            "name": {
+              "json": "0x534f2df12da611b7d04ecabf3b3ad788f9aec9771a4743537b4583ee1538773f"
+            },
+            "value": {
+              "json": {
+                "user_id": "0x06c2fd8c3b9651a153c57edbb6cb65a6bfc470d6f1b2ebc4dc0038c7072584ee",
+                "friend_id": "0x534f2df12da611b7d04ecabf3b3ad788f9aec9771a4743537b4583ee1538773f",
+                "status": 1,
+                "created_at": "1749194710523"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```

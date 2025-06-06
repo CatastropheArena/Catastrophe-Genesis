@@ -23,6 +23,8 @@ module citadel::citadel {
 
     /// 错误码定义
     const EProfileAlreadyRegistered: u64 = 0;
+    const EProfileAlreadyNotRegistered: u64 = 1;
+    
     const EInvalidProfileName: u64 = 1;
     const EInvalidProfile: u64 = 2;
     const ENoAccess: u64 = 1;
@@ -36,6 +38,7 @@ module citadel::citadel {
     
     /// 常量定义
     const INIT_RATING: u64 = 1000;
+
     const MAX_PLAYERS_PER_LOBBY: u64 = 5;
     const MIN_PLAYERS_PER_MATCH: u64 = 2;
     const FRIEND_REQUEST_PENDING: u8 = 1;
@@ -92,7 +95,7 @@ module citadel::citadel {
     }
 
     /// 用户好友关系
-    public  struct FriendRelation has store {
+    public struct FriendRelation has store {
         user_id: address,
         friend_id: address,
         status: u8, // 1=待确认, 2=已接受
@@ -102,7 +105,8 @@ module citadel::citadel {
     /// 好友关系存储
     public struct FriendshipStore has key {
         id: UID,
-        relations: Table<address, vector<FriendRelation>>,
+        // 外层table key是用户ID，内层table key是好友ID
+        relations: Table<address, Table<address, FriendRelation>>,
     }
     
     // ============= 卡牌相关数据结构 =============
@@ -389,25 +393,22 @@ module citadel::citadel {
         transfer::transfer(admin_cap, deployer);
     }
     // ============= Profile管理函数 =============
-    /// 用户使用护照创建Profile
-    public entry fun create_profile_with_passport(
+    /// 内部函数：创建Profile
+    fun create_profile_internal(
         manager: &mut ManagerStore,
         friendship: &mut FriendshipStore,
-        passport: &Passport,
+        passport_id: address,
         avatar: String,
         ctx: &mut TxContext
-    ) {
-        // 获取护照ID
-        let passport_id = passport.get_passport_id();
-        
-        // 检查关联的Profile是否已存在
+    ): address {
+        // 检查Profile是否已存在
         assert!(!table::contains(&manager.profiles, passport_id), EProfileAlreadyRegistered);
    
         // 创建用户对象
         let profile = Profile {
             id: object::new(ctx),
             avatar,
-            rating: INIT_RATING, // 初始分数
+            rating: INIT_RATING,
             played: 0,
             won: 0,
             lost: 0,
@@ -418,9 +419,8 @@ module citadel::citadel {
         // 更新管理器
         table::add(&mut manager.profiles, passport_id, profile_id);        
         // 初始化好友关系存储
-        table::add(&mut friendship.relations, profile_id, vector::empty<FriendRelation>());
+        table::add(&mut friendship.relations, profile_id, table::new<address, FriendRelation>(ctx));
         
-
         // 发送注册事件
         let sender = tx_context::sender(ctx);
         event::emit(ProfileRegistered {
@@ -431,15 +431,16 @@ module citadel::citadel {
         
         // 将profile对象共享给全局
         transfer::share_object(profile);
+        profile_id
     }
-    /// 用户修改Profile
-    public entry fun modify_profile(
-        manager: &mut ManagerStore,
+
+    /// 内部函数：修改Profile
+    fun modify_profile_internal(
+        manager: &ManagerStore,
         profile: &mut Profile,
-        passport: &Passport,
+        passport_id: address,
         avatar: String
     ) {
-        let passport_id = passport.get_passport_id();
         let profile_id = table::borrow(&manager.profiles, passport_id);
         // 判断通过passport_id获取的profile_id是否等于profile的id
         assert!(profile_id == profile.id.to_address(), EInvalidProfile);
@@ -448,6 +449,121 @@ module citadel::citadel {
             profile_id: profile.id.to_address(),
             avatar,
         });
+    }
+
+    /// 内部函数：发送好友请求
+    fun send_friend_request_internal(
+        friendship_store: &mut FriendshipStore,
+        from: &Profile,
+        to: &Profile,
+        clock: &Clock
+    ) {
+        let from_id = from.id.to_address();
+        let to_id = to.id.to_address();
+        let now = clock::timestamp_ms(clock);
+        
+        let sender_relations = table::borrow_mut(&mut friendship_store.relations, from_id);
+        // 检查是否已存在好友关系
+        assert!(!table::contains(sender_relations, to_id), EInvalidAction);
+        
+        // 创建发送者到接收者的关系
+        let sender_relation = FriendRelation {
+            user_id: from_id,
+            friend_id: to_id,
+            status: FRIEND_REQUEST_PENDING,
+            created_at: now,
+        };
+        table::add(sender_relations, to_id, sender_relation);
+        
+        let receiver_relations = table::borrow_mut(&mut friendship_store.relations, to_id);
+        
+        // 创建接收者到发送者的关系
+        let receiver_relation = FriendRelation {
+            user_id: to_id,
+            friend_id: from_id,
+            status: FRIEND_REQUEST_PENDING,
+            created_at: now,
+        };
+        table::add(receiver_relations, from_id, receiver_relation);
+        
+        // 发送事件
+        event::emit(FriendRequestSent {
+            from_user: from_id,
+            to_user: to_id,
+            timestamp: now,
+        });
+    }
+
+    /// 内部函数：接受好友请求
+    fun accept_friend_request_internal(
+        friendship_store: &mut FriendshipStore,
+        requester: &Profile,
+        receiver: &Profile,
+        clock: &Clock
+    ) {
+        let receiver_id = receiver.id.to_address();
+        let requester_id = requester.id.to_address();
+        let now = clock::timestamp_ms(clock);
+        
+        // 获取并验证接收者的好友关系
+        assert!(table::contains(&friendship_store.relations, receiver_id), EInvalidProfile);
+        let receiver_relations = table::borrow_mut(&mut friendship_store.relations, receiver_id);
+        assert!(table::contains(receiver_relations, requester_id), EInvalidAction);
+        
+        // 更新接收者的关系状态
+        let receiver_relation = table::borrow_mut(receiver_relations, requester_id);
+        assert!(receiver_relation.status == FRIEND_REQUEST_PENDING, EInvalidAction);
+        receiver_relation.status = FRIEND_REQUEST_ACCEPTED;
+        
+        // 获取并验证请求者的好友关系
+        assert!(table::contains(&friendship_store.relations, requester_id), EInvalidProfile);
+        let requester_relations = table::borrow_mut(&mut friendship_store.relations, requester_id);
+        assert!(table::contains(requester_relations, receiver_id), EInvalidAction);
+        
+        // 更新请求者的关系状态
+        let requester_relation = table::borrow_mut(requester_relations, receiver_id);
+        assert!(requester_relation.status == FRIEND_REQUEST_PENDING, EInvalidAction);
+        requester_relation.status = FRIEND_REQUEST_ACCEPTED;
+        
+        // 发送事件
+        event::emit(FriendRequestAccepted {
+            from_user: requester_id,
+            to_user: receiver_id,
+            timestamp: now,
+        });
+    }
+
+    /// 获取好友关系状态
+    public fun get_friend_relation_status(
+        friendship_store: &FriendshipStore,
+        from: &Profile,
+        to: &Profile,
+    ): u8 {
+        let from_id = from.id.to_address();
+        let to_id = to.id.to_address();
+        if (!table::contains(&friendship_store.relations, from_id)) {
+            return 0
+        };
+        
+        let user_relations = table::borrow(&friendship_store.relations, from_id);
+        if (!table::contains(user_relations, to_id)) {
+            return 0
+        };
+        
+        let relation = table::borrow(user_relations, to_id);
+        relation.status
+    }
+
+    /// 用户使用护照创建Profile
+    public entry fun create_profile_with_passport(
+        manager: &mut ManagerStore,
+        friendship: &mut FriendshipStore,
+        passport: &Passport,
+        avatar: String,
+        ctx: &mut TxContext
+    ) {
+        let passport_id = passport.get_passport_id();
+        create_profile_internal(manager, friendship, passport_id, avatar, ctx);
     }
 
     /// 管理员为某个passport_id创建Profile
@@ -459,55 +575,83 @@ module citadel::citadel {
         _: &AdminCap,
         ctx: &mut TxContext
     ) {
-        // 检查发送者是否为授权管理员
-        let sender = tx_context::sender(ctx);
-        // 检查用户名是否已存在
-        assert!(!table::contains(&manager.profiles, passport_id), EProfileAlreadyRegistered);
-        
-        // 检查用户名是否有效
-        
-        // 创建用户对象
-        let profile = Profile {
-            id: object::new(ctx),
-            avatar,
-            rating: INIT_RATING, // 初始分数
-            played: 0,
-            won: 0,
-            lost: 0,
-        };
-        
-        let profile_id = object::uid_to_address(&profile.id);
-        
-        // 更新管理器
-        table::add(&mut manager.profiles, passport_id, profile_id);
-        
-        // 初始化好友关系存储
-        table::add(&mut friendship.relations, profile_id, vector::empty<FriendRelation>());
-        
-        // 发送注册事件
-        event::emit(ProfileRegistered {
-            profile_id,
-            passport_id,
-            sender,
-        });
-        
-        // 将profile对象共享给全局
-        transfer::share_object(profile);
+        create_profile_internal(manager, friendship, passport_id, avatar, ctx);
     }
 
-    /// 管理员修改某个Profile的基础数据
-    public entry fun modify_profile_data(
+    /// 用户使用护照修改Profile
+    public entry fun modify_profile_with_passport(
+        manager: &mut ManagerStore,
         profile: &mut Profile,
+        passport: &Passport,
+        avatar: String
+    ) {
+        let passport_id = passport.get_passport_id();
+        modify_profile_internal(manager, profile, passport_id, avatar);
+    }
+
+    /// 管理员修改某个Profile
+    public entry fun modify_profile_for_passport(
+        manager: &mut ManagerStore,
+        profile: &mut Profile,
+        passport_id: address,
         avatar: String,
         _: &AdminCap,
     ) {
-        profile.avatar = avatar;
-        event::emit(ProfileModified {
-            profile_id: profile.id.to_address(),
-            avatar,
-        });
+        modify_profile_internal(manager, profile, passport_id, avatar);
     }
-    
+
+    /// 用户使用护照发送好友请求
+    public entry fun send_friend_request_with_passport(
+        manager: &mut ManagerStore,
+        friendship_store: &mut FriendshipStore,
+        from: &Profile,
+        to: &Profile,
+        passport: &Passport,
+        clock: &Clock
+    ) {
+        let passport_id = passport.get_passport_id();
+        let profile_id = table::borrow(&manager.profiles, passport_id);
+        assert!(profile_id == from.id.to_address(), EInvalidProfile);
+        send_friend_request_internal(friendship_store, from, to, clock);
+    }
+
+    /// 管理员发送好友请求
+    public entry fun send_friend_request_for_profile(
+        friendship_store: &mut FriendshipStore,
+        from: &Profile,
+        to: &Profile,
+        _: &AdminCap,
+        clock: &Clock,
+    ) {
+        send_friend_request_internal(friendship_store, from, to, clock);
+    }
+
+    /// 用户使用护照接受好友请求
+    public entry fun accept_friend_request_with_passport(
+        manager: &mut ManagerStore,
+        friendship_store: &mut FriendshipStore,
+        requester: &Profile,
+        receiver: &Profile,
+        passport: &Passport,
+        clock: &Clock
+    ) {
+        let passport_id = passport.get_passport_id();
+        let profile_id = table::borrow(&manager.profiles, passport_id);
+        assert!(profile_id == receiver.id.to_address(), EInvalidProfile);
+        accept_friend_request_internal(friendship_store, requester, receiver, clock);
+    }
+
+    /// 管理员接受好友请求
+    public entry fun accept_friend_request_for_profile(
+        friendship_store: &mut FriendshipStore,
+        requester: &Profile,
+        receiver: &Profile,
+        _: &AdminCap,
+        clock: &Clock
+    ) {
+        accept_friend_request_internal(friendship_store, requester, receiver, clock);
+    }
+
     /// 某个Profile胜利
     public entry fun profile_win(
         profile: &mut Profile,
@@ -593,95 +737,6 @@ module citadel::citadel {
         assert!(id == passport_id, ENoAccess);
         assert!(verify_nexus_passport(passport, game_entry), ENoAccess);
     }
-
-    /// 发送好友请求
-    public entry fun send_friend_request(
-        friendship_store: &mut FriendshipStore,
-        to_user_id: address,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        let sender = tx_context::sender(ctx);
-        let now = clock::timestamp_ms(clock);
-        
-        // 添加到发送者的关系列表
-        let sender_relations = table::borrow_mut(&mut friendship_store.relations, sender);
-        
-        let relation = FriendRelation {
-            user_id: sender,
-            friend_id: to_user_id,
-            status: FRIEND_REQUEST_PENDING,
-            created_at: now,
-        };
-        
-        vector::push_back(sender_relations, relation);
-        
-        // 添加到接收者的关系列表
-        let receiver_relations = table::borrow_mut(&mut friendship_store.relations, to_user_id);
-        
-        let relation = FriendRelation {
-            user_id: to_user_id,
-            friend_id: sender,
-            status: FRIEND_REQUEST_PENDING,
-            created_at: now,
-        };
-        
-        vector::push_back(receiver_relations, relation);
-        
-        // 发送事件
-        event::emit(FriendRequestSent {
-            from_user: sender,
-            to_user: to_user_id,
-            timestamp: now,
-        });
-    }
-    
-    /// 接受好友请求
-    public entry fun accept_friend_request(
-        friendship_store: &mut FriendshipStore,
-        from_user_id: address,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        let receiver = tx_context::sender(ctx);
-        let now = clock::timestamp_ms(clock);
-        
-        // 更新接收者的关系状态
-        let receiver_relations = table::borrow_mut(&mut friendship_store.relations, receiver);
-        let receiver_relations_len = vector::length(receiver_relations);
-        let mut i = 0;
-        
-        while (i < receiver_relations_len) {
-            let relation = vector::borrow_mut(receiver_relations, i);
-            if (relation.friend_id == from_user_id) {
-                relation.status = FRIEND_REQUEST_ACCEPTED;
-                break;
-            };
-            i = i + 1;
-        };
-        
-        // 更新发送者的关系状态
-        let sender_relations = table::borrow_mut(&mut friendship_store.relations, from_user_id);
-        let sender_relations_len = vector::length(sender_relations);
-        let mut i = 0;
-        
-        while (i < sender_relations_len) {
-            let relation = vector::borrow_mut(sender_relations, i);
-            if (relation.friend_id == receiver) {
-                relation.status = FRIEND_REQUEST_ACCEPTED;
-                break;
-            };
-            i = i + 1;
-        };
-        
-        // 发送事件
-        event::emit(FriendRequestAccepted {
-            from_user: from_user_id,
-            to_user: receiver,
-            timestamp: now,
-        });
-    }
-    
     
     // ============= 游戏大厅函数 =============
     

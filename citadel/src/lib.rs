@@ -47,6 +47,7 @@ pub mod gaming; // 游戏匹配模块
 pub mod keys; // 密钥服务器模块
 pub mod metrics;
 pub mod passport; // 用户护照系统
+pub mod profile;
 pub mod signed_message; // 签名消息处理
 #[cfg(test)]
 pub mod tests;
@@ -145,11 +146,14 @@ impl AppState {
         // 初始化ProfileManager
         let manager_store_id = ObjectID::from_hex_literal(&config["CITADEL_MANAGER_ADDRESS"])
             .expect("Invalid CITADEL_MANAGER_ADDRESS");
+        let friendship_store_id = ObjectID::from_hex_literal(&config["CITADEL_FRIENDSHIP_ADDRESS"])
+            .expect("Invalid CITADEL_FRIENDSHIP_ADDRESS");
         // 初始化GameManager
         let game_manager = Arc::new(GameManager::new(
             sui_client.clone(),
             network.clone(),
             manager_store_id,
+            friendship_store_id,
         ).await.unwrap());
         // 启动指标服务器,创建分组的metrics
         let registry_service = start_basic_prometheus_server(None);
@@ -526,6 +530,11 @@ impl AppState {
                 if let Err(e) = game_manager.update_all_profiles().await {
                     tracing::warn!("Failed to update user profiles: {}", e);
                 }
+                
+                // // 更新所有好友关系
+                // if let Err(e) = game_manager.update_all_relationships().await {
+                //     tracing::warn!("Failed to update relationships: {}", e);
+                // }
                 
                 // 获取最新的profiles数量
                 if let Ok(count) = game_manager.get_profile_size().await {

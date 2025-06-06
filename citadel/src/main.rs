@@ -25,13 +25,15 @@ use nautilus_server::catastrophe::{
     generate_avatar, 
     handle_create_profile,
     handle_get_profile,
-    handle_get_user_profile
+    handle_get_user_profile,
+    register_catastrophe_routes
 };
-use nautilus_server::session_login::{handle_session_token, handler_session_logout, auth_middleware,get_session_credentials};
 use nautilus_server::common::{get_attestation, health_check};
 use nautilus_server::keys::{handle_fetch_key, handle_get_service};
 use nautilus_server::ws::register_ws_routes;
 use nautilus_server::{init_tracing_logger, AppState};
+use nautilus_server::profile::register_profile_routes;
+use nautilus_server::session_login::{auth_middleware, register_auth_routes};
 
 const DEFAULT_PORT: u16 = 3000;
 
@@ -120,14 +122,11 @@ async fn start_server() -> Result<()> {
         .route("/process_data", post(process_data))
         .route("/v1/fetch_key", post(handle_fetch_key))
         .route("/v1/service", get(handle_get_service))
-        .route("/get_attestation", get(get_attestation))
-        .route("/auth/session_token", post(handle_session_token))
-        .route("/auth/session_logout", post(handler_session_logout))
-        .route("/auth/credentials", get(get_session_credentials))
-        .route("/user/avatar", get(generate_avatar));
-        // .route("/test/create_profile", post(handle_create_profile))
-        // .route("/test/get_profile", post(handle_get_profile))
-        // .route("/user/profile", get(handle_get_user_profile));
+        .route("/get_attestation", get(get_attestation));
+
+    let public_routes = register_auth_routes(public_routes);
+    let public_routes = register_profile_routes(public_routes);
+    let public_routes = register_catastrophe_routes(public_routes);
 
     // Configure protected routes that require JWT authentication
     let protected_routes = Router::new()
@@ -144,7 +143,8 @@ async fn start_server() -> Result<()> {
         .with_state(state_arc.clone());
     // Integrate WebSocket routes
     let app = register_ws_routes(app);
-    info!("Server started, WebSocket functionality integrated");
+    
+    info!("Server started, WebSocket and Profile functionality integrated");
     // integrate cors and session
     let app = app
         .layer(session_layer) // 添加 session 支持

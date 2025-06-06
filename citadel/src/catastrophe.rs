@@ -58,6 +58,12 @@ use hex;
 use tower_sessions::{Session, Expiry};
 use uuid::Uuid;
 use axum::extract::Extension;
+use crate::txb;
+use axum::{
+    routing::{get, post},
+    Router,
+};
+use crate::sdk::executor;
 
 
 /// 头像请求参数
@@ -312,4 +318,141 @@ pub async fn handle_get_user_profile(
             }))
         }
     }
+}
+
+/// 管理员发送好友请求的请求结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AdminSendFriendRequestRequest {
+    pub from_profile_id: String,  // 发送者的 Profile ID
+    pub to_profile_id: String,    // 接收者的 Profile ID
+}
+
+/// 管理员发送好友请求的响应结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AdminSendFriendRequestResponse {
+    pub success: bool,
+    pub digest: Option<String>,
+    pub error: Option<String>,
+}
+
+/// 处理管理员发送好友请求
+pub async fn handle_admin_send_friend_request(
+    State(app_state): State<Arc<AppState>>,
+    Json(payload): Json<AdminSendFriendRequestRequest>,
+) -> Result<Json<AdminSendFriendRequestResponse>, StatusCode> {
+    info!("收到管理员发送好友请求: {:?}", payload);
+    app_state.metrics.observe_request("admin_send_friend_request");
+
+    // 将 profile ID 转换为 ObjectID
+    let from_profile_id = ObjectID::from_hex_literal(&payload.from_profile_id)
+        .map_err(|e| {
+            warn!("无效的发送者 Profile ID: {}", e);
+            StatusCode::BAD_REQUEST
+        })?;
+
+    let to_profile_id = ObjectID::from_hex_literal(&payload.to_profile_id)
+        .map_err(|e| {
+            warn!("无效的接收者 Profile ID: {}", e);
+            StatusCode::BAD_REQUEST
+        })?;
+
+    // 调用执行器函数
+    match executor::admin_send_friend_request(&app_state, &from_profile_id, &to_profile_id).await {
+        Ok(response) => {
+            let digest = response.digest.to_string();
+            let tx_url = app_state.network.explorer_tx_url(&digest);
+            info!("管理员成功发送好友请求，交易摘要: {}", tx_url);
+            Ok(Json(AdminSendFriendRequestResponse {
+                success: true,
+                digest: Some(digest),
+                error: None,
+            }))
+        },
+        Err(err) => {
+            warn!("管理员发送好友请求失败: {:?}", err);
+            Ok(Json(AdminSendFriendRequestResponse {
+                success: false,
+                digest: None,
+                error: Some(err.to_string()),
+            }))
+        }
+    }
+}
+
+/// 获取好友关系请求结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetRelationshipRequest {
+    pub user_id: String,     // 用户的 Profile ID
+    pub profile_id: String,  // 目标用户的 Profile ID
+}
+
+/// 获取好友关系响应结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetRelationshipResponse {
+    pub success: bool,
+    pub relationship: Option<crate::sdk::manager::Relationship>,  // 好友关系信息
+    pub error: Option<String>,
+}
+
+/// 处理获取好友关系请求
+pub async fn handle_get_relationship(
+    State(app_state): State<Arc<AppState>>,
+    Json(payload): Json<GetRelationshipRequest>,
+) -> Result<Json<GetRelationshipResponse>, StatusCode> {
+    info!("收到获取好友关系请求: {:?}", payload);
+    app_state.metrics.observe_request("test_get_relationship");
+
+    // 将 ID 转换为 ObjectID
+    let user_id = match ObjectID::from_hex_literal(&payload.user_id) {
+        Ok(id) => id,
+        Err(err) => {
+            return Ok(Json(GetRelationshipResponse {
+                success: false,
+                relationship: None,
+                error: Some(format!("无效的用户ID: {}", err)),
+            }));
+        }
+    };
+
+    let profile_id = match ObjectID::from_hex_literal(&payload.profile_id) {
+        Ok(id) => id,
+        Err(err) => {
+            return Ok(Json(GetRelationshipResponse {
+                success: false,
+                relationship: None,
+                error: Some(format!("无效的目标用户ID: {}", err)),
+            }));
+        }
+    };
+
+    // 使用 GameManager 获取好友关系
+    match app_state.game_manager.get_relationship(&user_id, &profile_id).await {
+        Ok(relationship) => {
+            info!("成功获取好友关系: {:?}", relationship);
+            Ok(Json(GetRelationshipResponse {
+                success: true,
+                relationship,
+                error: None,
+            }))
+        },
+        Err(err) => {
+            warn!("获取好友关系失败: {:?}", err);
+            Ok(Json(GetRelationshipResponse {
+                success: false,
+                relationship: None,
+                error: Some(format!("获取好友关系失败: {}", err)),
+            }))
+        }
+    }
+}
+
+/// 注册 Catastrophe 相关路由
+pub fn register_catastrophe_routes(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
+    router
+        .route("/test/create_profile", post(handle_create_profile))
+        .route("/test/get_profile", post(handle_get_profile))
+        .route("/user/profile", get(handle_get_user_profile))
+        .route("/test/avatar", get(generate_avatar))
+        .route("/test/send_friend_request", post(handle_admin_send_friend_request))
+        .route("/test/get_relationship", post(handle_get_relationship))
 }

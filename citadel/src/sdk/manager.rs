@@ -8,9 +8,27 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::query::{query_all_table_content, query_object_content};
+use super::query::{query_all_table_content, query_object_content, query_relationship, query_all_relationships};
 use crate::cache::{Cache, CACHE_SIZE, CACHE_TTL};
 use crate::types::Network;
+
+/// 好友关系状态
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum RelationshipStatus {
+    /// 待确认
+    Pending = 1,
+    /// 已接受
+    Friends = 2,
+}
+
+/// 好友关系数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Relationship {
+    pub user_id: ObjectID,
+    pub friend_id: ObjectID,
+    pub status: RelationshipStatus,
+    pub created_at: u64,
+}
 
 /// Profile数据结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +39,14 @@ pub struct Profile {
     pub played: u64,
     pub won: u64,
     pub lost: u64,
+}
+
+/// Profile详细信息(包含关系)
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileWithRelationship {
+    #[serde(flatten)]
+    pub profile: Profile,
+    pub relationship: Option<Relationship>,
 }
 
 /// 游戏数据管理器
@@ -36,22 +62,25 @@ pub struct GameManager {
     network: Network,
     /// Profile缓存
     profile_cache: Arc<RwLock<Cache<ObjectID, Profile>>>,
+    /// 好友关系缓存
+    relationship_cache: Arc<RwLock<Cache<(ObjectID, ObjectID), Relationship>>>,
     /// PassportID到ProfileID的映射
     passport_profile_map: Arc<RwLock<HashMap<ObjectID, ObjectID>>>,
     /// Profile表格ID
     profile_table_id: ObjectID,
+    /// 好友关系存储ID
+    friendship_table_id: ObjectID,
     /// 上次更新时间
     last_update: Arc<AtomicU64>,
 }
 
 impl GameManager {
     /// 创建新的游戏数据管理器
-    pub async fn new(client: sui_sdk::SuiClient, network: Network, manager_store_id: ObjectID) -> Result<Self> {
+    pub async fn new(client: sui_sdk::SuiClient, network: Network, manager_store_id: ObjectID,friendship_store_id: ObjectID) -> Result<Self> {
         let profile_table_id = match network {
             #[cfg(test)]
             Network::TestCluster => ObjectID::ZERO, // 在测试环境中使用一个固定的ID
             _ => {
-                // 获取ManagerStore数据
                 let store = query_object_content(&network, &manager_store_id).await?;
                 // 获取profiles表格ID
                 let profile_table_id = store.content["profiles"]["id"]
@@ -61,13 +90,28 @@ impl GameManager {
                     .context("Failed to parse profiles table id")?
             }
         };
+        let friendship_table_id = match network {
+            #[cfg(test)]
+            Network::TestCluster => ObjectID::ZERO, // 在测试环境中使用一个固定的ID
+            _ => {
+                let store = query_object_content(&network, &friendship_store_id).await?;
+                // 获取profiles表格ID
+                let friendship_table_id = store.content["relations"]["id"]
+                    .as_str()
+                    .context("Failed to get friendship table id")?;
+                ObjectID::from_hex_literal(friendship_table_id)
+                    .context("Failed to parse friendship table id")?
+            }
+        };
 
         Ok(Self {
             client,
             network,
             profile_cache: Arc::new(RwLock::new(Cache::new(CACHE_TTL, CACHE_SIZE))),
+            relationship_cache: Arc::new(RwLock::new(Cache::new(CACHE_TTL, CACHE_SIZE))),
             passport_profile_map: Arc::new(RwLock::new(HashMap::new())),
             profile_table_id,
+            friendship_table_id,
             last_update: Arc::new(AtomicU64::new(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -260,4 +304,93 @@ impl GameManager {
         let mut cache = self.profile_cache.write().await;
         cache.insert(profile.id, profile);
     }
+
+    /// 获取用户关系
+    pub async fn get_relationship(&self, self_id: &ObjectID, other_id: &ObjectID) -> Result<Option<Relationship>> {
+        // 先检查缓存
+        let cache_key = (*self_id, *other_id);
+        if let Some(relationship) = self.relationship_cache.read().await.get(&cache_key) {
+            return Ok(Some(relationship));
+        }
+
+        // 查询链上数据
+        if let Some(result) = query_relationship(&self.network, &self.friendship_table_id, self_id, other_id).await? {
+            let relationship = Relationship {
+                user_id: result.user_id,
+                friend_id: result.friend_id,
+                status: match result.status {
+                    1 => RelationshipStatus::Pending,
+                    2 => RelationshipStatus::Friends,
+                    _ => return Ok(None),
+                },
+                created_at: result.created_at,
+            };
+            
+            // 更新缓存
+            self.relationship_cache.write().await.insert(cache_key, relationship.clone());
+            Ok(Some(relationship))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// 获取带关系信息的Profile
+    pub async fn get_profile_with_relationship(
+        &self,
+        profile_id: &ObjectID,
+        current_user_id: Option<&ObjectID>,
+    ) -> Result<ProfileWithRelationship> {
+        // 获取基础Profile信息
+        let profile = self.get_profile(profile_id).await?;
+        
+        // 如果提供了当前用户ID,则查询关系
+        let relationship = if let Some(user_id) = current_user_id {
+            self.get_relationship(user_id, profile_id).await?
+        } else {
+            None
+        };
+
+        Ok(ProfileWithRelationship {
+            profile,
+            relationship,
+        })
+    }
+
+    // /// 更新所有好友关系缓存
+    // pub async fn update_all_relationships(&self) -> Result<()> {
+    //     info!("开始更新所有好友关系缓存");
+        
+    //     // 查询所有好友关系
+    //     let all_relationships = query_all_relationships(&self.network, &self.friendship_table_id).await?;
+        
+    //     // 获取缓存写锁
+    //     let mut cache = self.relationship_cache.write().await;
+        
+    //     // 清空现有缓存
+    //     cache.clear();
+        
+    //     // 更新缓存
+    //     for user_data in all_relationships {
+    //         for relationship in user_data.relationships {
+    //             // 双向缓存关系
+    //             cache.insert(
+    //                 (relationship.user_id, relationship.friend_id),
+    //                 relationship.clone()
+    //             );
+    //             cache.insert(
+    //                 (relationship.friend_id, relationship.user_id),
+    //                 Relationship {
+    //                     user_id: relationship.friend_id,
+    //                     friend_id: relationship.user_id,
+    //                     status: relationship.status,
+    //                     created_at: relationship.created_at,
+    //                 }
+    //             );
+    //         }
+    //     }
+        
+    //     info!("好友关系缓存更新完成，共更新 {} 条记录", cache.len());
+    //     Ok(())
+    // }
+
 }

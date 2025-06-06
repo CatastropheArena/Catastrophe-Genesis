@@ -4,6 +4,8 @@
 use anyhow::Result;
 use axum::extract::Query;
 use axum::response::IntoResponse;
+use axum::routing::{get, post};
+use axum::Router;
 /**
  * 密钥服务器实现
  *
@@ -500,7 +502,7 @@ pub async fn handle_session_token(
 
 /// 获取用户Profile响应结构
 #[derive(Debug, Serialize)]
-pub struct GetUserCredentialsResponse {
+pub struct AuthCredentialsResponse {
     pub success: bool,
     pub credentials: Option<SessionUser>,
     pub error: Option<String>,
@@ -515,7 +517,7 @@ pub struct GetUserCredentialsResponse {
 pub async fn get_session_credentials(
     State(app_state): State<Arc<AppState>>,
     Extension(session): Extension<Session>,
-) -> Result<Json<GetUserCredentialsResponse>, InternalError> {
+) -> Result<Json<AuthCredentialsResponse>, InternalError> {
     info!("收到获取用户Profile请求");
     app_state.metrics.observe_request("get_user_profile");
 
@@ -524,13 +526,13 @@ pub async fn get_session_credentials(
         .ok_or(InternalError::Unauthorized)?;
 
     if user.profile.is_none() {
-        return Ok(Json(GetUserCredentialsResponse {
+        return Ok(Json(AuthCredentialsResponse {
             success: false,
             credentials: Some(user),
             error: Some("用户档案为空".to_string()),
         }));
     }else{
-        Ok(Json(GetUserCredentialsResponse {
+        Ok(Json(AuthCredentialsResponse {
             success: true,
             credentials: Some(user),
             error: None,
@@ -560,3 +562,11 @@ pub async fn handler_session_logout(
         message: "退出登录成功".to_string(),
     }))
 } 
+
+/// 注册认证路由
+pub fn register_auth_routes(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
+    router
+        .route("/auth/session_token", post(handle_session_token))
+        .route("/auth/session_logout", post(handler_session_logout))
+        .route("/auth/credentials", get(get_session_credentials))
+}

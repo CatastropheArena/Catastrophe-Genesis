@@ -119,6 +119,7 @@ impl SealTestCluster {
                 cluster.sui_client().clone(),
                 Network::TestCluster,
                 ObjectID::ZERO,
+                ObjectID::ZERO,
             ).await.unwrap();
             
             let server = SealKeyServer {
