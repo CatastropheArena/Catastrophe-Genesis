@@ -67,6 +67,8 @@ const GAS_PRICE_UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 const PACKAGE_ID_UPDATE_INTERVAL: Duration = Duration::from_secs(1800); // 30分钟检查一次
 /// 更新Profile的间隔
 const PROFILE_UPDATE_INTERVAL: Duration = Duration::from_secs(30); // 30秒检查一次
+/// 更新好友关系的间隔
+const RELATIONSHIP_UPDATE_INTERVAL: Duration = Duration::from_secs(60); // 60秒检查一次
 /// 时间戳类型（64位无符号整数）
 pub type Timestamp = u64;
 
@@ -517,7 +519,7 @@ impl AppState {
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs();
-                let last = game_manager.get_last_update();
+                let last = game_manager.get_last_profile_update();
                 let elapsed = now - last;
 
                 // 如果距离上次更新时间小于间隔，则等待剩余时间
@@ -530,11 +532,6 @@ impl AppState {
                 if let Err(e) = game_manager.update_all_profiles().await {
                     tracing::warn!("Failed to update user profiles: {}", e);
                 }
-                
-                // // 更新所有好友关系
-                // if let Err(e) = game_manager.update_all_relationships().await {
-                //     tracing::warn!("Failed to update relationships: {}", e);
-                // }
                 
                 // 获取最新的profiles数量
                 if let Ok(count) = game_manager.get_profile_size().await {
@@ -549,7 +546,72 @@ impl AppState {
             "Profile updater started, initial profiles count: {}, update interval: {} seconds, last update time: {}", 
             initial_count, 
             update_interval.as_secs(),
-            app_state.game_manager.get_last_update()
+            app_state.game_manager.get_last_profile_update()
+        );
+        
+        receiver
+    }
+
+    /**
+     * 启动好友关系更新器
+     * 
+     * 定期更新所有好友关系信息，确保数据的实时性
+     * 
+     * 参数:
+     * @param app_state - 应用状态，包含游戏管理器
+     * @param interval - 可选的更新间隔，如未指定则使用默认值
+     * 
+     * 返回:
+     * 包含当前关系数量的接收器
+     */
+    pub async fn spawn_relationship_updater(
+        app_state: &mut AppState,
+        interval: Option<Duration>,
+    ) -> tokio::sync::watch::Receiver<u64> {
+        // 获取初始关系数量
+        let initial_count = app_state.game_manager.get_relationship_cache_size().await;
+        
+        // 创建channel，初始值为当前关系数量
+        let (sender, receiver) = channel(initial_count);
+        
+        let update_interval = interval.unwrap_or(RELATIONSHIP_UPDATE_INTERVAL);
+        let game_manager = app_state.game_manager.clone();
+
+        // 启动更新任务
+        tokio::task::spawn(async move {
+            loop {
+                // 计算距离上次更新的时间
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let last = game_manager.get_last_relationship_update();
+                let elapsed = now - last;
+
+                // 如果距离上次更新时间小于间隔，则等待剩余时间
+                if elapsed < update_interval.as_secs() {
+                    let wait_time = update_interval.as_secs() - elapsed;
+                    tokio::time::sleep(Duration::from_secs(wait_time)).await;
+                }
+                
+                // 更新所有好友关系
+                if let Err(e) = game_manager.update_all_relationships().await {
+                    tracing::warn!("Failed to update relationships: {}", e);
+                }
+                
+                // 获取最新的关系数量
+                let count = game_manager.get_relationship_cache_size().await;
+                if sender.send(count).is_ok() {
+                    tracing::debug!("Relationships count updated: {}", count);
+                }
+            }
+        });
+        
+        info!(
+            "Relationship updater started, initial count: {}, update interval: {} seconds, last update time: {}", 
+            initial_count,
+            update_interval.as_secs(),
+            app_state.game_manager.get_last_relationship_update()
         );
         
         receiver

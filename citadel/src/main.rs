@@ -88,6 +88,7 @@ async fn main() -> Result<()> {
 async fn start_server() -> Result<()> {
     let mut state = AppState::new().await;
     AppState::spawn_profile_updater(&mut state, None).await;
+    AppState::spawn_relationship_updater(&mut state, None).await;
     AppState::spawn_latest_checkpoint_timestamp_updater(&mut state, None).await;
     AppState::spawn_reference_gas_price_updater(&mut state, None).await;
     AppState::spawn_package_id_updater(&mut state, None).await;

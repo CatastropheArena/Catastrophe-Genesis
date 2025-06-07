@@ -129,6 +129,23 @@
              },
          );
      }
+ 
+     /**
+      * 获取缓存中的条目数量
+      * 
+      * 返回:
+      * 当前缓存中的条目数量
+      */
+     pub fn len(&self) -> usize {
+         self.cache.lock().len()
+     }
+ 
+     /**
+      * 清空缓存中的所有条目
+      */
+     pub fn clear(&self) {
+         self.cache.lock().clear();
+     }
  }
  
  #[cfg(test)]

@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::query::{query_all_table_content, query_object_content, query_relationship, query_all_relationships};
+use super::query::{query_all_table_content, query_object_content};
 use crate::cache::{Cache, CACHE_SIZE, CACHE_TTL};
 use crate::types::Network;
 
@@ -70,8 +70,10 @@ pub struct GameManager {
     profile_table_id: ObjectID,
     /// 好友关系存储ID
     friendship_table_id: ObjectID,
-    /// 上次更新时间
-    last_update: Arc<AtomicU64>,
+    /// Profile上次更新时间
+    last_profile_update: Arc<AtomicU64>,
+    /// 关系上次更新时间
+    last_relationship_update: Arc<AtomicU64>,
 }
 
 impl GameManager {
@@ -104,6 +106,11 @@ impl GameManager {
             }
         };
 
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
         Ok(Self {
             client,
             network,
@@ -112,18 +119,19 @@ impl GameManager {
             passport_profile_map: Arc::new(RwLock::new(HashMap::new())),
             profile_table_id,
             friendship_table_id,
-            last_update: Arc::new(AtomicU64::new(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            )),
+            last_profile_update: Arc::new(AtomicU64::new(current_time)),
+            last_relationship_update: Arc::new(AtomicU64::new(current_time)),
         })
     }
 
-    /// 获取上次更新时间
-    pub fn get_last_update(&self) -> u64 {
-        self.last_update.load(Ordering::Relaxed)
+    /// 获取Profile上次更新时间
+    pub fn get_last_profile_update(&self) -> u64 {
+        self.last_profile_update.load(Ordering::Relaxed)
+    }
+
+    /// 获取关系上次更新时间
+    pub fn get_last_relationship_update(&self) -> u64 {
+        self.last_relationship_update.load(Ordering::Relaxed)
     }
 
     /// 获取Profile数量
@@ -282,7 +290,7 @@ impl GameManager {
         }
 
         // 更新完成后更新时间戳
-        self.last_update.store(
+        self.last_profile_update.store(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -303,35 +311,6 @@ impl GameManager {
     pub async fn update_profile_cache(&self, profile: Profile) {
         let mut cache = self.profile_cache.write().await;
         cache.insert(profile.id, profile);
-    }
-
-    /// 获取用户关系
-    pub async fn get_relationship(&self, self_id: &ObjectID, other_id: &ObjectID) -> Result<Option<Relationship>> {
-        // 先检查缓存
-        let cache_key = (*self_id, *other_id);
-        if let Some(relationship) = self.relationship_cache.read().await.get(&cache_key) {
-            return Ok(Some(relationship));
-        }
-
-        // 查询链上数据
-        if let Some(result) = query_relationship(&self.network, &self.friendship_table_id, self_id, other_id).await? {
-            let relationship = Relationship {
-                initiator: result.initiator,
-                receiver: result.receiver,
-                status: match result.status {
-                    1 => RelationshipStatus::Pending,
-                    2 => RelationshipStatus::Friends,
-                    _ => return Ok(None),
-                },
-                created_at: result.created_at,
-            };
-            
-            // 更新缓存
-            self.relationship_cache.write().await.insert(cache_key, relationship.clone());
-            Ok(Some(relationship))
-        } else {
-            Ok(None)
-        }
     }
 
     /// 获取带关系信息的Profile
@@ -356,41 +335,91 @@ impl GameManager {
         })
     }
 
-    // /// 更新所有好友关系缓存
-    // pub async fn update_all_relationships(&self) -> Result<()> {
-    //     info!("开始更新所有好友关系缓存");
+
+    /// 获取用户关系
+    pub async fn get_relationship(&self, a: &ObjectID, b: &ObjectID) -> Result<Option<Relationship>> {
+        // 先检查缓存
+        let cache_key = (*a, *b);
+        if let Some(relationship) = self.relationship_cache.read().await.get(&cache_key) {
+            return Ok(Some(relationship.clone()));
+        }
+
+        // 缓存未命中，执行全量更新
+        debug!("关系缓存未命中，执行全量更新 a: {:?}, b: {:?}", a, b);
+        self.update_all_relationships().await?;
+
+        // 再次尝试从缓存获取
+        Ok(self.relationship_cache.read().await.get(&cache_key).map(|r| r.clone()))
+    }
+
+
+    /// 获取关系缓存大小
+    pub async fn get_relationship_cache_size(&self) -> u64 {
+        self.relationship_cache.read().await.len() as u64
+    }
+
+    /// 更新所有好友关系缓存
+    pub async fn update_all_relationships(&self) -> Result<()> {
+        info!("开始更新所有好友关系缓存");
         
-    //     // 查询所有好友关系
-    //     let all_relationships = query_all_relationships(&self.network, &self.friendship_table_id).await?;
+        // 查询所有好友关系
+        let fields = query_all_table_content(&self.network, &self.friendship_table_id, None).await?;
+        info!("获取到 {} 个关系记录", fields.len());
         
-    //     // 获取缓存写锁
-    //     let mut cache = self.relationship_cache.write().await;
+        // 获取缓存写锁
+        let mut cache = self.relationship_cache.write().await;
         
-    //     // 清空现有缓存
-    //     cache.clear();
+        // 清空现有缓存
+        cache.clear();
         
-    //     // 更新缓存
-    //     for user_data in all_relationships {
-    //         for relationship in user_data.relationships {
-    //             // 双向缓存关系
-    //             cache.insert(
-    //                 (relationship.user_id, relationship.friend_id),
-    //                 relationship.clone()
-    //             );
-    //             cache.insert(
-    //                 (relationship.friend_id, relationship.user_id),
-    //                 Relationship {
-    //                     user_id: relationship.friend_id,
-    //                     friend_id: relationship.user_id,
-    //                     status: relationship.status,
-    //                     created_at: relationship.created_at,
-    //                 }
-    //             );
-    //         }
-    //     }
+        // 更新缓存
+        for field in fields {
+            // 解析关系键
+            let key: serde_json::Value = serde_json::from_str(&field.name)?;
+            let a = ObjectID::from_hex_literal(key["a"].as_str().unwrap_or_default())?;
+            let b = ObjectID::from_hex_literal(key["b"].as_str().unwrap_or_default())?;
+            
+            // 解析关系数据
+            let relation_data: serde_json::Value = serde_json::from_str(&field.value)?;
+            let from_a = relation_data["from_a"].as_bool().unwrap_or_default();
+            
+            // 根据 from_a 确定发起者和接收者
+            let (initiator, receiver) = if from_a {
+                (a, b)
+            } else {
+                (b, a)
+            };
+            
+            let relationship = Relationship {
+                initiator,
+                receiver,
+                status: match relation_data["status"].as_u64().unwrap_or_default() as u8 {
+                    1 => RelationshipStatus::Pending,
+                    2 => RelationshipStatus::Friends,
+                    _ => continue,
+                },
+                created_at: relation_data["created_at"]
+                    .as_str()
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or_default(),
+            };
+            
+            // 双向缓存关系
+            cache.insert((initiator, receiver), relationship.clone());
+            cache.insert((receiver, initiator), relationship);
+        }
         
-    //     info!("好友关系缓存更新完成，共更新 {} 条记录", cache.len());
-    //     Ok(())
-    // }
+        // 更新完成后更新时间戳
+        self.last_relationship_update.store(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            Ordering::Relaxed,
+        );
+        
+        info!("好友关系缓存更新完成，共更新 {} 条记录", cache.len());
+        Ok(())
+    }
 
 }
